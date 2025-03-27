@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 from datetime import datetime
 
-from src.esql.parser.constants import AGGREGATE_FUNCTIONS, CONDITIONAL_OPERATORS
+from src.esql.parser.constants import CONDITIONAL_OPERATORS
 from src.esql.parser.error import ParsingError, ParsingErrorType
 from src.esql.parser.types import ParsedSelectClause, GlobalAggregate, GroupAggregate, AggregatesDict, ParsedWhereClause, SimpleCondition, CompoundCondition, NotCondition, LogicalOperator, ParsedSuchThatClause, SimpleGroupCondition, CompoundGroupCondition, NotGroupCondition, ParsedHavingClause, CompoundHavingCondition, NotHavingCondition, GlobalHavingCondition, GroupHavingCondition
 
@@ -97,9 +97,7 @@ def parse_select_clause(select_clause: str, groups: list[str], columns: dict[str
     
     for item in (s.strip() for s in select_clause.split(',')):
         if '.' in item:
-            aggregate_result = parse_select_aggregate(item, groups, columns)
-            if aggregate_result is None:
-                raise ParsingError(ParsingErrorType.SELECT_CLAUSE, f"Invalid aggregate: '{item}'")
+            aggregate_result = parse_aggregate(item, groups, columns, ParsingErrorType.SELECT_CLAUSE)
             if 'group' in aggregate_result:
                 aggregates['group_specific'].append(aggregate_result)
             else:
@@ -541,8 +539,7 @@ def parse_having_condition(condition: str, groups: list[str], columns: dict[str,
 ###########################################################################
 # Helper Functions
 ###########################################################################
-
-def parse_select_aggregate(aggregate, groups, columns) -> GlobalAggregate | GroupAggregate | None:
+def parse_aggregate(aggregate: str, groups: list[str], columns: dict[str, np.dtype], error_type=ParsingErrorType.SELECT_CLAUSE or ParsingErrorType.HAVING_CLAUSE) -> GlobalAggregate | GroupAggregate:
     '''
     Parse an aggregate expression using dot notation (e.g., column.agg or group.column.agg).
 
@@ -552,17 +549,23 @@ def parse_select_aggregate(aggregate, groups, columns) -> GlobalAggregate | Grou
         columns: Dictionary of available columns.
 
     Returns:
-        GlobalAggregate | GroupAggregate | None: The parsed aggregate or None if invalid.
-    '''
-    parts = aggregate.split('.')
+        GlobalAggregate | GroupAggregate: The parsed aggregate.
     
+    Raises:
+        ParsingError the aggregate is invalid.
+    '''
+    AGGREGATE_FUNCTIONS = ['sum','avg','min', 'max', 'count']
+    parts = aggregate.split('.')
+
     # Format: column.aggregate_function
     if len(parts) == 2:
         column, func = parts
-        if column not in columns or func not in AGGREGATE_FUNCTIONS:
-            return None
-        if not pd.api.types.is_numeric_dtype(columns[column]) and func != 'count':
-            return None
+        if column not in columns:
+            raise ParsingError(error_type, f"Invalid aggregate column: '{aggregate}'")
+        elif func not in AGGREGATE_FUNCTIONS:
+            raise ParsingError(error_type, f"Invalid aggregate function: '{aggregate}'")
+        elif func != 'count' and not (pd.api.types.is_any_real_numeric_dtype(columns[column])):
+            raise ParsingError(error_type, f"Invalid aggregate. Column is not a numeric type: '{aggregate}'")
         return GlobalAggregate(
             column=column,
             function=func,
@@ -572,12 +575,14 @@ def parse_select_aggregate(aggregate, groups, columns) -> GlobalAggregate | Grou
     # Format: group.column.aggregate_function
     elif len(parts) == 3:
         group, column, func = parts
-        if (group not in groups or 
-            column not in columns or 
-            func not in AGGREGATE_FUNCTIONS):
-            return None
-        if not pd.api.types.is_numeric_dtype(columns[column]) and func != 'count':
-            return None
+        if group not in groups:
+            raise ParsingError(error_type, f"Invalid aggregate group: '{aggregate}'")
+        elif column not in columns:
+            raise ParsingError(error_type, f"Invalid aggregate column: '{aggregate}'")
+        elif func not in AGGREGATE_FUNCTIONS:
+            raise ParsingError(error_type, f"Invalid aggregate function: '{aggregate}'")
+        elif func != 'count' and not (pd.api.types.is_any_real_numeric_dtype(columns[column])):
+            raise ParsingError(error_type, f"Invalid aggregate. Column is not a numeric type: '{aggregate}'")
         return GroupAggregate(
             group=group,
             column=column,
@@ -585,7 +590,7 @@ def parse_select_aggregate(aggregate, groups, columns) -> GlobalAggregate | Grou
             datatype=float
         )
     
-    return None
+    raise ParsingError(error_type, f"Invalid aggregate: '{aggregate}'\nAggregate must be in the format 'column.aggregate_function' or 'group.column.aggregate_function'")
 
 
 def collect_having_aggregates(having_condition: ParsedHavingClause) -> AggregatesDict:

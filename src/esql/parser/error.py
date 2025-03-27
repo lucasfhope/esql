@@ -12,7 +12,7 @@ class ParsingErrorType(Enum):
 
 class ParsingError(Exception):
     def __init__(self, error_type: ParsingErrorType, message: str):
-        self.error_type = error_type.upper()
+        self.error_type = error_type
         self.message = message
         super().__init__(self.message)
 

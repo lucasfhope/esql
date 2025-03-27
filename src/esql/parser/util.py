@@ -1,20 +1,22 @@
 import re
 import numpy as np
+import pandas as pd
 from datetime import datetime
 
-from src.esql.parser.constants import KEYWORDS, AGGREGATE_FUNCTIONS, CONDITIONAL_OPERATORS
+from src.esql.parser.constants import AGGREGATE_FUNCTIONS, CONDITIONAL_OPERATORS
 from src.esql.parser.error import ParsingError, ParsingErrorType
-from src.esql.parser.types import ParsedSelectClause, DataType, GlobalAggregate, GroupAggregate, AggregatesDict, ParsedWhereClause, SimpleCondition, CompoundCondition, NotCondition, LogicalOperator, ParsedSuchThatClause, SimpleGroupCondition, CompoundGroupCondition, NotGroupCondition, ParsedHavingClause, CompoundHavingCondition, NotHavingCondition, GlobalHavingCondition, GroupHavingCondition
+from src.esql.parser.types import ParsedSelectClause, GlobalAggregate, GroupAggregate, AggregatesDict, ParsedWhereClause, SimpleCondition, CompoundCondition, NotCondition, LogicalOperator, ParsedSuchThatClause, SimpleGroupCondition, CompoundGroupCondition, NotGroupCondition, ParsedHavingClause, CompoundHavingCondition, NotHavingCondition, GlobalHavingCondition, GroupHavingCondition
+
 
 ###########################################################################
 # Keyword & Clause Extraction
 ###########################################################################
-def get_keyword_clauses(query: str) -> list[str]:
+def get_keyword_clauses(query: str) -> dict[str, str]:
     '''
     Split the query into clauses based on the keywords.
 
     Parameters:
-        query: The full query string.
+        query: The full query string (keywords should be lowercase).
 
     Returns:
         List of clause strings corresponding to each keyword in the keywords list.
@@ -22,12 +24,18 @@ def get_keyword_clauses(query: str) -> list[str]:
     Raises:
         ParsingError: If the query is missing SELECT or if keywords appear out of order.
     '''
-    keywords = [keyword.lower() for keyword in KEYWORDS]
-    keyword_indices = []
-    keyword_clauses = []
-    
+    keyword_clauses = {
+        "SELECT": "",
+        "OVER": "",
+        "WHERE": "",
+        "SUCH THAT": "",
+        "HAVING": "",
+        "ORDER BY": ""
+    }
+
     # Find the location of each keyword in the query.
-    for keyword in keywords:
+    keyword_indices = []
+    for keyword in (kw.lower() for kw in keyword_clauses.keys()):
         pattern = r'\b' + re.escape(keyword.strip()) + r'\b'
         matches = list(re.finditer(pattern, query))
         if matches:
@@ -41,6 +49,7 @@ def get_keyword_clauses(query: str) -> list[str]:
 
     # Extract clauses based on keyword positions.
     previous_index = 0
+    keywords = list(keyword_clauses.keys())
     previous_keyword = keywords[0]
     for keyword, keyword_index in zip(keywords[1:], keyword_indices[1:]):
         if keyword_index == -1:
@@ -50,19 +59,14 @@ def get_keyword_clauses(query: str) -> list[str]:
         clause = query[previous_index + len(previous_keyword):keyword_index].strip()
         if not clause:
             raise ParsingError(ParsingErrorType.MISSING_CLAUSE, f"No {previous_keyword.strip().upper()} argument found")
-        keyword_clauses.append(clause)
+        keyword_clauses[previous_keyword] = clause
         previous_index = keyword_index
         previous_keyword = keyword
 
     clause = query[previous_index + len(previous_keyword):].strip()
     if not clause:
         raise ParsingError(ParsingErrorType.MISSING_CLAUSE, f"No {previous_keyword.strip().upper()} argument found")
-    keyword_clauses.append(clause)
-
-    # For any missing keywords, insert an empty clause.
-    for i in range(len(keywords)):
-        if keyword_indices[i] == -1:
-            keyword_clauses.insert(i, '')
+    keyword_clauses[previous_keyword] = clause
             
     return keyword_clauses
 
@@ -96,7 +100,7 @@ def parse_select_clause(select_clause: str, groups: list[str], columns: dict[str
             aggregate_result = parse_select_aggregate(item, groups, columns)
             if aggregate_result is None:
                 raise ParsingError(ParsingErrorType.SELECT_CLAUSE, f"Invalid aggregate: '{item}'")
-            if aggregate_result is GroupAggregate:
+            if 'group' in aggregate_result:
                 aggregates['group_specific'].append(aggregate_result)
             else:
                 aggregates['global_scope'].append(aggregate_result)
@@ -539,7 +543,7 @@ def parse_having_condition(condition: str, groups: list[str], columns: dict[str,
 ###########################################################################
 
 def parse_select_aggregate(aggregate, groups, columns) -> GlobalAggregate | GroupAggregate | None:
-    """
+    '''
     Parse an aggregate expression using dot notation (e.g., column.agg or group.column.agg).
 
     Parameters:
@@ -548,14 +552,16 @@ def parse_select_aggregate(aggregate, groups, columns) -> GlobalAggregate | Grou
         columns: Dictionary of available columns.
 
     Returns:
-        Aggregate | GroupAggregate | None: The parsed aggregate or None if invalid.
-    """
+        GlobalAggregate | GroupAggregate | None: The parsed aggregate or None if invalid.
+    '''
     parts = aggregate.split('.')
     
     # Format: column.aggregate_function
     if len(parts) == 2:
         column, func = parts
         if column not in columns or func not in AGGREGATE_FUNCTIONS:
+            return None
+        if not pd.api.types.is_numeric_dtype(columns[column]) and func != 'count':
             return None
         return GlobalAggregate(
             column=column,
@@ -569,6 +575,8 @@ def parse_select_aggregate(aggregate, groups, columns) -> GlobalAggregate | Grou
         if (group not in groups or 
             column not in columns or 
             func not in AGGREGATE_FUNCTIONS):
+            return None
+        if not pd.api.types.is_numeric_dtype(columns[column]) and func != 'count':
             return None
         return GroupAggregate(
             group=group,

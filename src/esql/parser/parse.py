@@ -1,6 +1,7 @@
 import re
 import src.esql.parser.util as util
-from src.esql.parser.constants import ParsingError
+
+from src.esql.parser.error import ParsingError
 
 
 

@@ -1,10 +1,11 @@
 import pytest
 import pandas as pd
 import numpy as np
+import pprint
 
 from src.esql.main import _enforce_allowed_dtypes
-from src.esql.parser.util import get_keyword_clauses, parse_select_clause
-from src.esql.parser.types import ParsedSelectClause, AggregatesDict, GlobalAggregate, GroupAggregate
+from src.esql.parser.util import get_keyword_clauses, parse_select_clause, parse_where_clause
+from src.esql.parser.types import ParsedSelectClause, AggregatesDict, GlobalAggregate, GroupAggregate, ParsedWhereClause, LogicalOperator, SimpleCondition, CompoundCondition, NotCondition
 from src.esql.parser.error import ParsingError, ParsingErrorType
 
 @pytest.fixture
@@ -140,6 +141,61 @@ def test_parse_select_clause_finds_invalid_column(columns: dict[str, np.dtype]):
             columns=columns
         )
     assert parsingError.value.error_type == ParsingErrorType.SELECT_CLAUSE and "Invalid column: 'cust_'" in parsingError.value.message
+
+
+###########################################################################
+# PARSE_WHERE_CLAUSE TESTS
+###########################################################################
+def test_parse_where_clause_returns_expected_structure(columns: dict[str, np.dtype]):
+    parsedWhereClause = parse_where_clause(
+        where_clause="not (cust = 'Dan') and (month = 7 or month = 8 and year = 2020) and credit",
+        columns=columns
+    )
+    expected: ParsedWhereClause = CompoundCondition(
+        operator=LogicalOperator.AND,
+        conditions=[
+            NotCondition(
+                operator=LogicalOperator.NOT,
+                condition=SimpleCondition(
+                    column='cust',
+                    operator='=',
+                    value='Dan'
+                )
+            ),
+            CompoundCondition(
+                operator=LogicalOperator.OR,
+                conditions=[
+                    SimpleCondition(
+                        column='month',
+                        operator='=',
+                        value=7.0
+                    ),
+                    CompoundCondition(
+                        operator=LogicalOperator.AND,
+                        conditions=[
+                            SimpleCondition(
+                                column='month',
+                                operator='=',
+                                value=8.0
+                            ),
+                            SimpleCondition(
+                                column='year',
+                                operator='=',
+                                value=2020.0
+                            )
+                        ]
+                    )
+                ]
+            ),
+            SimpleCondition(
+                column='credit',
+                operator='=',
+                value=True
+            )
+        ]
+    )
+    assert parsedWhereClause == expected
+        
 
 
 

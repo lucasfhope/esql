@@ -3,7 +3,6 @@ import numpy as np
 import pandas as pd
 from datetime import datetime
 
-from src.esql.parser.constants import CONDITIONAL_OPERATORS
 from src.esql.parser.error import ParsingError, ParsingErrorType
 from src.esql.parser.types import ParsedSelectClause, GlobalAggregate, GroupAggregate, AggregatesDict, ParsedWhereClause, SimpleCondition, CompoundCondition, NotCondition, LogicalOperator, ParsedSuchThatClause, SimpleGroupCondition, CompoundGroupCondition, NotGroupCondition, ParsedHavingClause, CompoundHavingCondition, NotHavingCondition, GlobalHavingCondition, GroupHavingCondition
 
@@ -146,7 +145,7 @@ def parse_where_clause(where_clause: str, columns: dict[str, np.dtype]) -> Parse
             return parse_where_clause(where_clause[1:-1].strip(), columns)
 
     # Split by top-level OR operators.
-    or_conditions = split_by_operator(where_clause, 'or')
+    or_conditions = split_by_logical_operator(where_clause, LogicalOperator.OR)
     if len(or_conditions) > 1:
         return CompoundCondition(
             operator=LogicalOperator.OR,
@@ -154,7 +153,7 @@ def parse_where_clause(where_clause: str, columns: dict[str, np.dtype]) -> Parse
         )
 
     # Split by top-level AND operators.
-    and_conditions = split_by_operator(where_clause, 'and')
+    and_conditions = split_by_logical_operator(where_clause, LogicalOperator.AND)
     if len(and_conditions) > 1:
         return CompoundCondition(
             operator=LogicalOperator.AND,
@@ -162,17 +161,18 @@ def parse_where_clause(where_clause: str, columns: dict[str, np.dtype]) -> Parse
         )
 
     # Handle a leading NOT operator.
-    if where_clause.lower().startswith('not '):
+    if where_clause.lower().startswith(LogicalOperator.NOT.value.lower()+' '):
         condition = where_clause[4:].strip()
         if condition.startswith('(') and condition.endswith(')'):
             condition = condition[1:-1].strip()
         return NotCondition(
             operator=LogicalOperator.NOT,
             condition=parse_where_clause(condition, columns)
-        )      
+        )     
     
     # Parse as a SimpleCondition.
-    return parse_where_condition(where_clause, columns)
+    condition: SimpleCondition = parse_where_condition(where_clause, columns)
+    return condition
 
 
 def parse_where_condition(condition: str, columns: dict[str, np.dtype]) -> SimpleCondition:
@@ -193,10 +193,9 @@ def parse_where_condition(condition: str, columns: dict[str, np.dtype]) -> Simpl
     if condition.startswith('(') and condition.endswith(')'):
         condition = condition[1:-1].strip()
 
-    operator_pattern = r'\s*(' + '|'.join(re.escape(op) for op in CONDITIONAL_OPERATORS) + r')\s*'
-    match = re.search(operator_pattern, condition)
+    match = find_conditional_operator(condition)
     if not match:
-        if condition in columns and columns[condition] == np.bool_:
+        if condition in columns and pd.api.types.is_bool_dtype(columns[condition]):
             return SimpleCondition(
                 column=condition,
                 operator='=',
@@ -289,7 +288,7 @@ def parse_such_that_clause(condition: str, groups: list[str], columns: dict[str,
         if is_outermost:
             return parse_such_that_clause(condition[1:-1].strip(), groups, columns)
 
-    or_conditions = split_by_operator(condition, 'or')
+    or_conditions = split_by_logical_operator(condition, 'or')
     if len(or_conditions) > 1:
         parsed_or_conditions = [parse_such_that_clause(cond, groups, columns) for cond in or_conditions]
         groups_found = {groupCondition['group'] for groupCondition in parsed_or_conditions if 'group' in groupCondition}
@@ -301,7 +300,7 @@ def parse_such_that_clause(condition: str, groups: list[str], columns: dict[str,
             conditions=parsed_or_conditions
         )
 
-    and_conditions = split_by_operator(condition, 'and')
+    and_conditions = split_by_logical_operator(condition, 'and')
     if len(and_conditions) > 1:
         parsed_and_conditions = [parse_such_that_clause(cond, groups, columns) for cond in and_conditions]
         groups_found = {sub['group'] for sub in parsed_and_conditions if 'group' in sub}
@@ -414,6 +413,8 @@ def parse_group_condition(condition: str, group: str, columns: dict[str, np.dtyp
 ###########################################################################
 # HAVING Clause Parsing
 ###########################################################################
+
+#TODO: Update return types to my defined types
 def parse_having_clause(condition: str, groups: list[str], columns: dict[str, np.dtype]) -> ParsedHavingClause:
     '''
     Parse the HAVING clause into a nested structure supporting AND, OR, and NOT operators.
@@ -445,14 +446,14 @@ def parse_having_clause(condition: str, groups: list[str], columns: dict[str, np
         if is_outermost:
             return parse_having_clause(condition[1:-1].strip(), groups, columns)
 
-    or_conditions = split_by_operator(condition, 'or')
+    or_conditions = split_by_logical_operator(condition, 'or')
     if len(or_conditions) > 1:
         return {
             'operator': 'OR',
             'conditions': [parse_having_clause(cond, groups, columns) for cond in or_conditions]
         }
 
-    and_conditions = split_by_operator(condition, 'and')
+    and_conditions = split_by_logical_operator(condition, 'and')
     if len(and_conditions) > 1:
         return {
             'operator': 'AND',
@@ -470,7 +471,7 @@ def parse_having_clause(condition: str, groups: list[str], columns: dict[str, np
 
     return parse_having_condition(condition, groups, columns)
 
-
+#TODO: Integrate with new parse_aggregate() and find a way to also return aggregates found in the condition so i can get rid of the collect_having_aggregates() function
 def parse_having_condition(condition: str, groups: list[str], columns: dict[str, np.dtype]) ->  GroupHavingCondition | GlobalHavingCondition:
     '''
     Parse a single HAVING condition with dot notation (e.g., quant.sum > 100 or g1.quant.avg = 50).
@@ -592,6 +593,21 @@ def parse_aggregate(aggregate: str, groups: list[str], columns: dict[str, np.dty
     
     raise ParsingError(error_type, f"Invalid aggregate: '{aggregate}'\nAggregate must be in the format 'column.aggregate_function' or 'group.column.aggregate_function'")
 
+def find_conditional_operator(condition: str) -> re.Match | None:
+    '''
+    Find the first conditional operator (>=,<=,!=,==,>,<,=) in a condition string.
+
+    Parameters:
+        condition: The condition string.
+    
+    Returns:
+        re.Match | None: The match object if an operator is found, otherwise None.
+    '''
+    CONDITIONAL_OPERATORS = ['>=', '<=', '!=', '==', '>', '<', '=']
+    operator_pattern = r'\s*(' + '|'.join(re.escape(op) for op in CONDITIONAL_OPERATORS) + r')\s*'
+    match = re.search(operator_pattern, condition)
+    return match
+
 
 def collect_having_aggregates(having_condition: ParsedHavingClause) -> AggregatesDict:
     '''
@@ -641,7 +657,7 @@ def collect_having_aggregates(having_condition: ParsedHavingClause) -> Aggregate
     return aggregates
 
 
-def split_by_operator(condition: str, operator: str) -> list[str]:
+def split_by_logical_operator(condition: str, operator: LogicalOperator) -> list[str]:
     '''
     Split a condition by the given operator while respecting nested parentheses.
 
@@ -667,13 +683,13 @@ def split_by_operator(condition: str, operator: str) -> list[str]:
             paren_level -= 1
 
         # Check for the operator only when not inside parentheses.
-        if (char == ' ' and 
-            i + 1 + len(operator) <= len(condition) and 
-            condition[i + 1:i + 1 + len(operator)].lower() == operator and 
-            paren_level == 0):
+        if (char == ' ' 
+            and i + 1 + len(operator.value) <= len(condition) 
+            and condition[i + 1:i + 1 + len(operator.value)].lower() == operator.value.lower()
+            and paren_level == 0):
             parts.append(current.strip())
             current = ''
-            i += len(operator) + 1  # Skip operator and following space.
+            i += len(operator.value) + 1  # Skip operator and following space.
         else:
             current += char
             i += 1

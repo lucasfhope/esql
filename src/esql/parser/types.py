@@ -1,4 +1,4 @@
-from typing import TypedDict, Union, Literal, List, Dict
+from typing import TypedDict, Union, Literal, List, Dict, Tuple
 from enum import Enum
 from datetime import date
 
@@ -34,9 +34,9 @@ class ParsedSelectClause(TypedDict):
 ###################
 
 class LogicalOperator(Enum):
-    AND = "AND"
-    OR = "OR"
-    NOT = "NOT"
+    AND = "and"
+    OR = "or"
+    NOT = "not"
 
 class SimpleCondition(TypedDict):
     column: str
@@ -45,13 +45,14 @@ class SimpleCondition(TypedDict):
 
 class CompoundCondition(TypedDict):
     operator: Literal[LogicalOperator.AND, LogicalOperator.OR]
-    conditions: List['ParsedWhereClause'] 
+    conditions: List['ConditionType']
 
 class NotCondition(TypedDict):
     operator: Literal[LogicalOperator.NOT]
-    condition: 'ParsedWhereClause'
+    condition: 'ConditionType'
 
-ParsedWhereClause = Union[SimpleCondition, CompoundCondition, NotCondition]
+ConditionType = SimpleCondition | CompoundCondition | NotCondition
+ParsedWhereClause = ConditionType
 
 
 class SimpleGroupCondition(SimpleCondition):

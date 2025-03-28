@@ -1,5 +1,6 @@
 from enum import Enum
     
+
 class ParsingErrorType(Enum):
     SELECT_CLAUSE = "SELECT CLAUSE"
     WHERE_CLAUSE = "WHERE CLAUSE"

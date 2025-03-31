@@ -42,6 +42,8 @@ class SimpleCondition(TypedDict):
     column: str
     operator: str
     value: Union[float, bool, str, date]
+    # EMF is when the comparison value is based on the entry value of the column.
+    is_emf: bool                            
 
 class CompoundCondition(TypedDict):
     operator: Literal[LogicalOperator.AND, LogicalOperator.OR]
@@ -73,7 +75,7 @@ class GlobalHavingCondition(TypedDict):
     column: str
     function: str
     operator: str
-    value: float
+    value: float   
 
 class GroupHavingCondition(GlobalHavingCondition):
     group: str

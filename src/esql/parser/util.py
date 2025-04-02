@@ -2,6 +2,7 @@ import re
 import numpy as np
 import pandas as pd
 from datetime import datetime, date
+import numexpr as ne
 
 from src.esql.parser.error import ParsingError, ParsingErrorType
 from src.esql.parser.types import ParsedSelectClause, GlobalAggregate, GroupAggregate, AggregatesDict, ParsedWhereClause, SimpleCondition, CompoundCondition, NotCondition, LogicalOperator, ParsedSuchThatClause, SimpleGroupCondition, CompoundGroupCondition, NotGroupCondition, ParsedHavingClause, CompoundHavingCondition, NotHavingCondition, GlobalHavingCondition, GroupHavingCondition
@@ -251,6 +252,7 @@ def parse_such_that_clause(condition: str, groups: list[str], columns: dict[str,
     '''
     condition = condition.strip()
 
+    # Remove outer parentheses if they wrap the entire clause.
     if condition.startswith('(') and condition.endswith(')'):
         paren_level = 0
         is_outermost = True
@@ -265,6 +267,7 @@ def parse_such_that_clause(condition: str, groups: list[str], columns: dict[str,
         if is_outermost:
             return parse_such_that_clause(condition[1:-1].strip(), groups, columns)
 
+    # Split by top-level OR operators.
     or_conditions = split_by_logical_operator(condition, LogicalOperator.OR)
     if len(or_conditions) > 1:
         parsed_or_conditions = [parse_such_that_clause(cond, groups, columns) for cond in or_conditions]
@@ -277,6 +280,7 @@ def parse_such_that_clause(condition: str, groups: list[str], columns: dict[str,
             conditions=parsed_or_conditions
         )
 
+    # Split by top-level AND operators.
     and_conditions = split_by_logical_operator(condition, LogicalOperator.AND)
     if len(and_conditions) > 1:
         parsed_and_conditions = [parse_such_that_clause(cond, groups, columns) for cond in and_conditions]
@@ -289,6 +293,7 @@ def parse_such_that_clause(condition: str, groups: list[str], columns: dict[str,
             conditions=parsed_or_conditions
         )
 
+    # Handle a leading NOT operator.
     if condition.lower().startswith(LogicalOperator.NOT.value.lower()+' '):
         inner_condition = condition[4:].strip()
         if inner_condition.startswith('(') and inner_condition.endswith(')'):
@@ -305,11 +310,12 @@ def parse_such_that_clause(condition: str, groups: list[str], columns: dict[str,
             group_found = group
             break
     if not group_found:
-        raise ParsingError(ParsingErrorType.SUCH_THAT_CLAUSE, f"Invalid group condition: '{condition}'. No valid group found.")
+        raise ParsingError(ParsingErrorType.SUCH_THAT_CLAUSE, f"No valid group found in condition: '{condition}'. .")
 
     if any(other_group + '.' in condition for other_group in groups if other_group != group_found):
-        raise ParsingError(ParsingErrorType.SUCH_THAT_CLAUSE, f"Condition '{condition}' contains multiple groups. Each section must contain only one group.")
-
+        raise ParsingError(ParsingErrorType.SUCH_THAT_CLAUSE, f"Condition contains multiple groups '{condition}'\nEach section must contain only one group.")
+    
+    # Parse as a SimpleGroupCondition
     return parse_group_condition(condition, group_found, columns)
 
 
@@ -353,30 +359,16 @@ def parse_group_condition(condition: str, group: str, columns: dict[str, np.dtyp
     right = parts[1].strip()
 
     if not left.startswith(group + '.'):
-        raise ParsingError(ParsingErrorType.SUCH_THAT_CLAUSE, "Invalid group for condition: '{condition}'")
+        raise ParsingError(ParsingErrorType.SUCH_THAT_CLAUSE, f"Invalid group for condition: '{condition}'")
     column = left[len(group) + 1:]
     if column not in columns:
         raise ParsingError(ParsingErrorType.SUCH_THAT_CLAUSE, f"Invalid column: '{column}'")
+    if operator and value == '':
+        raise ParsingError(ParsingErrorType.WHERE_CLAUSE, f"Missing value for condition: {condition}")
 
-    if operator in ['>=', '<=', '>', '<']:
-        if re.match(r"^'\d{4}-\d{2}-\d{2}'$", right) or re.match(r'^"\d{4}-\d{2}-\d{2}"$', right):
-            value = datetime.strptime(right.strip("'\""), '%Y-%m-%d').date()
-        else:
-            try:
-                value = float(right)
-            except ValueError:
-                raise ParsingError(ParsingErrorType.SUCH_THAT_CLAUSE, f"Invalid value for condition: '{condition}'")
-    elif operator in ['=', '==', '!=']:
-        if right.lower() in ['true', 'false']:
-            value = right.lower() == 'true'
-        elif re.match(r"^'\d{4}-\d{2}-\d{2}'$", right) or re.match(r'^"\d{4}-\d{2}-\d{2}"$', right):
-            value = datetime.strptime(right.strip("'\""), '%Y-%m-%d').date()
-        elif right.isdigit():
-            value = float(right)
-        else:
-            value = right.strip('"').strip("'")
-    else:
-        raise ParsingError(ParsingErrorType.SUCH_THAT_CLAUSE, f"Invalid operator: '{operator}'")
+    
+
+
 
     return SimpleGroupCondition(
         group=group,
@@ -697,8 +689,10 @@ def parse_comparision_value(column_dtype: np.dtype, operator: str, value: str, c
     value = value.strip()
     
     is_emf = False
-    if value in columns:
-        is_emf = True
+    emf_dummy = value
+    #value_split = re.findall(r'\w+', text)
+    #if any(col in value_split for col in columns):
+        #is_emf = True
 
     if operator in ['>=', '<=', '>', '<']:
         if is_emf:
@@ -713,9 +707,8 @@ def parse_comparision_value(column_dtype: np.dtype, operator: str, value: str, c
                 raise ParsingError(error_type, f"Invalid date in condition: '{condition}'")
         elif pd.api.types.is_numeric_dtype(column_dtype):
             try:
-                value = float(value)
-                return (int(value), False) if value.is_integer() else (value, False)
-            except ValueError:
+                return ne.evaluate(value), False
+            except Exception:
                 raise ParsingError(error_type, f"Invalid value in condition: '{condition}'")
         raise ParsingError(error_type, f"Invalid column reference or value in condition: '{condition}'")
             
@@ -738,9 +731,8 @@ def parse_comparision_value(column_dtype: np.dtype, operator: str, value: str, c
             return value[1:-1], False
         elif pd.api.types.is_numeric_dtype(column_dtype):
             try:
-                value = float(value)
-                return (int(value), False) if value.is_integer() else (value, False)
-            except ValueError:
+                return ne.evaluate(value), False
+            except Exception:
                 raise ParsingError(error_type, f"Invalid value in condition: '{condition}'")
         raise ParsingError(error_type, f"Invalid column reference or value in condition: '{condition}'")
         

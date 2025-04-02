@@ -296,7 +296,7 @@ def test_parse_where_clause_raises_error_for_missing_conditional_operators(colum
         )
     assert parsingError.value.error_type == ParsingErrorType.WHERE_CLAUSE and "No conditional operator" in parsingError.value.message 
 
-def test_parse_where_clause_raises_error_for_invalid_value(columns: dict[str, np.dtype]):
+def test_parse_where_clause_raises_error_for_invalid_values(columns: dict[str, np.dtype]):
     invalid_values = [
         "cust = 123",
         "cust = 12.3",

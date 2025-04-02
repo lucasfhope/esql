@@ -147,9 +147,9 @@ def test_parse_select_clause_raises_error_for_invalid_column(columns: dict[str, 
 ###########################################################################
 # PARSE_WHERE_CLAUSE TESTS
 ###########################################################################
-def test_parse_where_clause_returns_expected_structure(columns: dict[str, np.dtype]):
+def test_parse_where_clause_returns_expected_structure_with_logical_operators(columns: dict[str, np.dtype]):
     parsedWhereClause = parse_where_clause(
-        where_clause="not (cust = 'Dan') and (month = 7 or month = 8 and year = 2020) and credit",
+        where_clause="not (cust = 'Dan') and (month = 7 or month = 8 and year = 2020) and credit=True",
         columns=columns
     )
     expected: ParsedWhereClause = CompoundCondition(
@@ -202,31 +202,118 @@ def test_parse_where_clause_returns_expected_structure(columns: dict[str, np.dty
     )
     assert parsedWhereClause == expected
 
-def test_parse_where_clause_can_handle_dates(columns: dict[str, np.dtype]):
+def test_parse_where_clause_can_handle_boolean_column_condition(columns: dict[str, np.dtype]):
     parsedWhereClause = parse_where_clause(
-        where_clause='date > "2020-07-01"',
+        where_clause="credit",
         columns=columns
     )
     expected: ParsedWhereClause = SimpleCondition(
-        column='date',
-        operator='>',
-        value=date(2020, 7, 1),
+        column='credit',
+        operator='=',
+        value=True,
         is_emf=False
     )
     assert parsedWhereClause == expected
 
+def test_parse_where_clause_can_handle_valid_simple_conditions(columns: dict[str, np.dtype]):
+        conditions = [
+            ("cust", "==", "'Dan'"),
+            ("quant", ">", 10),
+            ("month", "<", 12),
+            ("credit", "!=", True),
+            ("credit", "=", False),
+            ("credit", "==", True),
+            ("quant", "<=", 21.6)
+        ]
+        for column, operator, value in conditions:    
+            parsedWhereClause = parse_where_clause(
+                where_clause=f"{column} {operator} {str(value)}",
+                columns=columns
+            ) 
+            if isinstance(value, str):
+                value = value[1:-1]
+            expected: ParsedWhereClause = SimpleCondition(
+                column=column,
+                operator=operator,
+                value=value,
+                is_emf=False
+            )
+            assert parsedWhereClause == expected
 
+def test_parse_where_clause_can_handle_valid_dates(columns: dict[str, np.dtype]):
+       date_clauses = [
+           ('>=', "'2020-07-01'", date(2020, 7, 1)),
+           ('<=', '"2021/12/07"', date(2021, 12, 7)),
+           ('>', "'2020/7-1\"", date(2020, 7, 1)),
+           ('<', "'2012-01/30'", date(2012, 1, 30)),
+           ('!=', "\"2020-7-1'", date(2020, 7, 1)),
+           ('=', "'2020-07-01'", date(2020, 7, 1)),
+           ('==', '"2020-7-1"', date(2020, 7, 1))
+       ]
+       for operator, value, expected_date in date_clauses:  
+            parsedWhereClause = parse_where_clause(
+                where_clause=f'date {operator} {value}',
+                columns=columns
+            )
+            expected: ParsedWhereClause = SimpleCondition(
+                column='date',
+                operator=operator,
+                value=expected_date,
+                is_emf=False
+            )
+            assert parsedWhereClause == expected
 
-
-
-def test_parse_where_clause_raises_error_for_no_valid_conditional_operators(columns: dict[str, np.dtype]):
+def test_parse_where_clause_raises_error_when_date_is_not_wrapped_in_quotes(columns: dict[str, np.dtype]):
     with pytest.raises(ParsingError) as parsingError:
         parse_where_clause(
-            where_clause="column 'value'",
+            where_clause="date != 2019-10-8",
             columns=columns
         )
     assert parsingError.value.error_type == ParsingErrorType.WHERE_CLAUSE
 
+
+def test_parse_where_clause_raises_error_for_invalid_dates(columns: dict[str, np.dtype]):
+    dates = [
+        "2023-13-01",
+        "2023-02-29",  
+        "2023-00-01",   
+        "2023-01-00",   
+        "2023-4-31"
+    ]
+    for date in dates:
+        with pytest.raises(ParsingError) as parsingError:
+            parse_where_clause(
+                where_clause=f"date = '{date}'",
+                columns=columns
+            )  
+        assert parsingError.value.error_type == ParsingErrorType.WHERE_CLAUSE
+
+def test_parse_where_clause_raises_error_for_missing_conditional_operators(columns: dict[str, np.dtype]):
+    with pytest.raises(ParsingError) as parsingError:
+        parse_where_clause(
+            where_clause="cust 'Dan'",
+            columns=columns
+        )
+    assert parsingError.value.error_type == ParsingErrorType.WHERE_CLAUSE and "No conditional operator" in parsingError.value.message 
+
+def test_parse_where_clause_raises_error_for_invalid_value(columns: dict[str, np.dtype]):
+    invalid_values = [
+        "cust = 123",
+        "cust = 12.3",
+        "cust = True",
+        "cust = False",
+        "cust > 'Dan'",
+        "quant == '12'",
+        "month != true",
+        "credit > true"
+    ]
+    for invalid_value in invalid_values:
+        with pytest.raises(ParsingError) as parsingError:
+            parse_where_clause(
+                where_clause=invalid_value,
+                columns=columns
+            )
+        assert parsingError.value.error_type == ParsingErrorType.WHERE_CLAUSE and any(error in parsingError.value.message for error in ["Invalid value", "Invalid column reference"])
             
 
 

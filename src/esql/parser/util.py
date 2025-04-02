@@ -202,7 +202,7 @@ def parse_where_condition(condition: str, columns: dict[str, np.dtype]) -> Simpl
                 value=True,
                 is_emf = False
             )
-        raise ParsingError(ParsingErrorType.WHERE_CLAUSE, f"Invalid condition: '{condition}'")
+        raise ParsingError(ParsingErrorType.WHERE_CLAUSE, f"No conditional operator found in condition: '{condition}'")
 
     operator = match.group(1)
     parts = re.split(r'\s*' + re.escape(operator) + r'\s*', condition)
@@ -707,14 +707,17 @@ def parse_comparision_value(column_dtype: np.dtype, operator: str, value: str, c
                 return value, True
             raise ParsingError(error_type, f"Invalid column referance for comparison in condition: '{condition}'")
         elif re.match(date_pattern, value) and pd.api.types.is_datetime64_any_dtype(column_dtype):
-            return datetime.strptime(value[1:-1].replace('/', '-'), '%Y-%m-%d').date(), False
+            try:
+                return datetime.strptime(value[1:-1].replace('/', '-'), '%Y-%m-%d').date(), False
+            except ValueError:
+                raise ParsingError(error_type, f"Invalid date in condition: '{condition}'")
         elif pd.api.types.is_numeric_dtype(column_dtype):
             try:
                 value = float(value)
                 return (int(value), False) if value.is_integer() else (value, False)
             except ValueError:
-                raise ParsingError(error_type, f"Value is not a number in condition: '{condition}'")
-        raise ParsingError(error_type, f"Invalids column reference or value in condition: '{condition}'")
+                raise ParsingError(error_type, f"Invalid value in condition: '{condition}'")
+        raise ParsingError(error_type, f"Invalid column reference or value in condition: '{condition}'")
             
     elif operator in ['=', '==', '!=']:
         if is_emf:
@@ -725,16 +728,21 @@ def parse_comparision_value(column_dtype: np.dtype, operator: str, value: str, c
                 return value, True 
         elif value.lower() in ['true', 'false'] and pd.api.types.is_bool_dtype(column_dtype):
             return value.lower() == 'true', False
-        elif re.match(date_pattern, value):
-            return datetime.strptime(value[1:-1].replace('/', '-'), '%Y-%m-%d').date()
-        elif (value.startswith("'") and value.endswith("'")) or (value.startswith('"') and value.endswith('"')) \
+        elif re.match(date_pattern, value) and pd.api.types.is_datetime64_any_dtype(column_dtype):
+            try:
+                return datetime.strptime(value[1:-1].replace('/', '-'), '%Y-%m-%d').date(), False
+            except ValueError:
+                raise ParsingError(error_type, f"Invalid date in condition: '{condition}'")
+        elif (value.startswith("'") and value.endswith("'") or value.startswith('"') and value.endswith('"')) \
             and pd.api.types.is_string_dtype(column_dtype):
             return value[1:-1], False
-        try:
-            value = float(value)
-            return (int(value), False) if value.is_integer() else (value, False)
-        except ValueError:
-            raise ParsingError(error_type, f"Invalid value in condition: '{condition}'")
+        elif pd.api.types.is_numeric_dtype(column_dtype):
+            try:
+                value = float(value)
+                return (int(value), False) if value.is_integer() else (value, False)
+            except ValueError:
+                raise ParsingError(error_type, f"Invalid value in condition: '{condition}'")
+        raise ParsingError(error_type, f"Invalid column reference or value in condition: '{condition}'")
         
     raise ParsingError(error_type, f"Invalid operator in condition: '{condition}'")
         

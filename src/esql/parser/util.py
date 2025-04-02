@@ -216,7 +216,7 @@ def parse_where_condition(condition: str, columns: dict[str, np.dtype]) -> Simpl
         raise ParsingError(ParsingErrorType.WHERE_CLAUSE, f"Invalid column: {column}")
     if operator and value == '':
         raise ParsingError(ParsingErrorType.WHERE_CLAUSE, f"Missing value for condition: {condition}")
-
+    
     value, is_emf = parse_comparision_value(columns[column], operator, value, columns, condition, ParsingErrorType.WHERE_CLAUSE)
     return SimpleCondition(
         column=column,
@@ -693,7 +693,7 @@ def parse_comparision_value(column_dtype: np.dtype, operator: str, value: str, c
     Raises:
         ParsingError when the value is invalid.
     '''
-    date_pattern = r"^['\"]\d{4}[-/]\d{2}[-/]\d{2}['\"]$"
+    date_pattern = r"^['\"]\d{4}[-/]\d{1,2}[-/]\d{1,2}['\"]$"
     value = value.strip()
     
     is_emf = False
@@ -707,14 +707,14 @@ def parse_comparision_value(column_dtype: np.dtype, operator: str, value: str, c
                 return value, True
             raise ParsingError(error_type, f"Invalid column referance for comparison in condition: '{condition}'")
         elif re.match(date_pattern, value) and pd.api.types.is_datetime64_any_dtype(column_dtype):
-            return datetime.strptime(value.replace('/', '-'), '%Y-%m-%d').date(), False
+            return datetime.strptime(value[1:-1].replace('/', '-'), '%Y-%m-%d').date(), False
         elif pd.api.types.is_numeric_dtype(column_dtype):
             try:
                 value = float(value)
                 return (int(value), False) if value.is_integer() else (value, False)
             except ValueError:
                 raise ParsingError(error_type, f"Value is not a number in condition: '{condition}'")
-        raise ParsingError(error_type, f"Invalid column reference or value in condition: '{condition}'")
+        raise ParsingError(error_type, f"Invalids column reference or value in condition: '{condition}'")
             
     elif operator in ['=', '==', '!=']:
         if is_emf:
@@ -726,7 +726,7 @@ def parse_comparision_value(column_dtype: np.dtype, operator: str, value: str, c
         elif value.lower() in ['true', 'false'] and pd.api.types.is_bool_dtype(column_dtype):
             return value.lower() == 'true', False
         elif re.match(date_pattern, value):
-            return datetime.strptime(value.replace('/', '-'), '%Y-%m-%d').date()
+            return datetime.strptime(value[1:-1].replace('/', '-'), '%Y-%m-%d').date()
         elif (value.startswith("'") and value.endswith("'")) or (value.startswith('"') and value.endswith('"')) \
             and pd.api.types.is_string_dtype(column_dtype):
             return value[1:-1], False

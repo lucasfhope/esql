@@ -37,24 +37,25 @@ def _enforce_allowed_dtypes(df: pd.DataFrame) -> pd.DataFrame:
     Returns:
         pd.DataFrame: A new DataFrame with enforced dtypes.
     '''
-
     df = df.copy()
-    
+
     for col in df.columns:
         current_dtype = df[col].dtype
-        
-        if pd.api.types.is_string_dtype(current_dtype):
-            df[col] = df[col].astype("string")
-        elif pd.api.types.is_bool_dtype(current_dtype):
-            pass
-        elif pd.api.types.is_datetime64_any_dtype(current_dtype):
-            pass
+        if pd.api.types.is_bool_dtype(current_dtype):
+            continue
         elif pd.api.types.is_numeric_dtype(current_dtype):
-            if not (pd.api.types.is_integer_dtype(current_dtype) or pd.api.types.is_float_dtype(current_dtype)):
-                df[col] = pd.to_numeric(df[col], errors='coerce')
-        else:
-            # For any other type (object, categorical, ...) convert to string.
-            df[col] = df[col].astype("string")
-    
+            continue
+        elif pd.api.types.is_datetime64_any_dtype(current_dtype):
+            continue
+        elif pd.api.types.is_object_dtype(current_dtype):
+            try:
+                # Try to convert to datetime if possible
+                converted = pd.to_datetime(df[col], format="%Y-%m-%d", errors='raise')
+                df[col] = converted
+                continue
+            except (ValueError, TypeError):
+                pass
+        df[col] = df[col].astype("string")
+
     return df
        

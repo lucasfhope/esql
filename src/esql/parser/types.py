@@ -62,7 +62,6 @@ class SimpleGroupCondition(SimpleCondition):
 
 class CompoundGroupCondition(CompoundCondition):
     conditions: List['ParsedSuchThatClause']
-    group: str
 
 class NotGroupCondition(NotCondition):
     condition: 'ParsedSuchThatClause'

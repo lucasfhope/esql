@@ -213,56 +213,35 @@ def parse_where_condition(condition: str, columns: dict[str, np.dtype]) -> Simpl
 ###########################################################################
 # SUCH THAT Clause Parsing
 ###########################################################################
-def parse_such_that_clause(condition: str, groups: list[str], columns: dict[str, np.dtype]) -> ParsedSuchThatClause:
-    '''
-    Parse the condition statement for a specific group ensuring that each section contains only one group.
-    
-    This function supports logical operators (OR, AND, NOT) and nested parentheses with the following precedence:
-      1. OR (lowest)
-      2. AND
-      3. NOT (highest)
+def parse_such_that_clause(such_that_clause: str, groups: list[str], columns: dict[str, np.dtype]) -> ParsedSuchThatClause:
+    such_that_clause = such_that_clause.strip()
+    if has_wrapping_parenthesis(such_that_clause):
+        return parse_such_that_clause(such_that_clause[1:-1].strip(), groups, columns)
 
-    Parameters:
-        condition: The SUCH THAT clause condition.
-        groups: List of valid group identifiers.
-        columns: Dictionary of available columns.
-
-    Returns:
-        ParsedSuchThatClause: A nested dictionary representing the parsed SUCH THAT clause.
-    
-    Raises:
-        ParsingError: If the condition is invalid or references multiple groups.
-    '''
-    condition = condition.strip()
-    if has_wrapping_parenthesis(condition):
-        return parse_such_that_clause(condition[1:-1].strip(), groups, columns)
-
-    or_conditions = split_by_logical_operator(condition, LogicalOperator.OR)
+    or_conditions = split_by_logical_operator(such_that_clause, LogicalOperator.OR)
     if len(or_conditions) > 1:
         parsed_or_conditions = [parse_such_that_clause(cond, groups, columns) for cond in or_conditions]
         groups_found = {groupCondition['group'] for groupCondition in parsed_or_conditions if 'group' in groupCondition}
         if len(groups_found) != 1:
-            raise ParsingError(ParsingErrorType.SUCH_THAT_CLAUSE, f"Multiple groups found in a section: '{condition}'\nEach section must contain only one group.")
+            raise ParsingError(ParsingErrorType.SUCH_THAT_CLAUSE, f"Multiple groups found in a clause: '{such_that_clause}'\nEach comma seperated clause must contain only one group.")
         return CompoundGroupCondition(
-            group=parsed_or_conditions[0]['group'],
             operator=LogicalOperator.OR,
             conditions=parsed_or_conditions
         )
 
-    and_conditions = split_by_logical_operator(condition, LogicalOperator.AND)
+    and_conditions = split_by_logical_operator(such_that_clause, LogicalOperator.AND)
     if len(and_conditions) > 1:
         parsed_and_conditions = [parse_such_that_clause(cond, groups, columns) for cond in and_conditions]
-        groups_found = {sub['group'] for sub in parsed_and_conditions if 'group' in sub}
+        groups_found = {groupCondition['group'] for groupCondition in parsed_and_conditions if 'group' in groupCondition}
         if len(groups_found) != 1:
-            raise ParsingError(ParsingErrorType.SUCH_THAT_CLAUSE, f"Multiple groups found in a section: '{condition}'\nEach section must contain only one group.")
+            raise ParsingError(ParsingErrorType.SUCH_THAT_CLAUSE, f"Multiple groups found in a clause: '{such_that_clause}'\nEach comma seperated clause must contain only one group.")
         return CompoundGroupCondition(
-            group=parsed_or_conditions[0]['group'],
             operator=LogicalOperator.AND,
-            conditions=parsed_or_conditions
+            conditions=parsed_and_conditions
         )
 
-    if condition.lower().startswith(LogicalOperator.NOT.value.lower()+' '):
-        condition = condition[len(LogicalOperator.NOT.value)+1:].strip()
+    if such_that_clause.lower().startswith(LogicalOperator.NOT.value.lower()+' '):
+        condition = such_that_clause[len(LogicalOperator.NOT.value)+1:].strip()
         if condition.startswith('(') and condition.endswith(')'):
             condition = condition[1:-1].strip()
         return NotGroupCondition(
@@ -272,20 +251,19 @@ def parse_such_that_clause(condition: str, groups: list[str], columns: dict[str,
 
     group_found = None
     for group in groups:
-        if condition.startswith(group + '.'):
+        if such_that_clause.startswith(group + '.'):
             group_found = group
             break
     if not group_found:
-        raise ParsingError(ParsingErrorType.SUCH_THAT_CLAUSE, f"No valid group found in condition: '{condition}'")
+        raise ParsingError(ParsingErrorType.SUCH_THAT_CLAUSE, f"No valid group found in condition: '{such_that_clause}'")
 
-    if any(other_group + '.' in condition for other_group in groups if other_group != group_found):
-        raise ParsingError(ParsingErrorType.SUCH_THAT_CLAUSE, f"Multiple groups found in a section: '{condition}'\nEach section must contain only one group.")
+    if any(other_group + '.' in such_that_clause for other_group in groups if other_group != group_found):
+        raise ParsingError(ParsingErrorType.SUCH_THAT_CLAUSE, f"Multiple groups found in a clause: '{such_that_clause}'\nEach comma seperated clause must contain only one group.")
     
-    condition: SimpleGroupCondition = parse_group_condition(condition, group_found, columns)
-    return condition
+    return parse_simple_group_condition(such_that_clause, group_found, columns)
+    
 
-
-def parse_group_condition(condition: str, group: str, columns: dict[str, np.dtype]) -> SimpleGroupCondition:
+def parse_simple_group_condition(condition: str, group: str, columns: dict[str, np.dtype]) -> SimpleGroupCondition:
     '''
     Parse a single condition for a specific group.
 
@@ -307,13 +285,14 @@ def parse_group_condition(condition: str, group: str, columns: dict[str, np.dtyp
     match = find_conditional_operator(condition)
     if not match:
         if condition.startswith(group + '.'):
-            column_name = condition[len(group) + 1:].strip()
-            if column_name in columns and pd.api.types.is_bool_dtype(columns[column_name]):
+            column = condition[len(group) + 1:].strip()
+            if column in columns and pd.api.types.is_bool_dtype(columns[column]):
                 return SimpleGroupCondition(
                     group=group,
-                    column=column_name,
+                    column=column,
                     operator='=',
-                    value=True
+                    value=True,
+                    is_emf=False
                 )
         raise ParsingError(ParsingErrorType.SUCH_THAT_CLAUSE, f"Invalid condition: '{condition}'")
     operator = match.group(1)
@@ -330,7 +309,7 @@ def parse_group_condition(condition: str, group: str, columns: dict[str, np.dtyp
     if column not in columns:
         raise ParsingError(ParsingErrorType.SUCH_THAT_CLAUSE, f"Invalid column: '{column}'")
     if operator and value == '':
-        raise ParsingError(ParsingErrorType.WHERE_CLAUSE, f"Missing value for condition: {condition}")
+        raise ParsingError(ParsingErrorType.SUCH_THAT_CLAUSE, f"Missing value for condition: {condition}")
 
     value, is_emf = parse_condition_value(columns[column], operator, value, columns, condition, ParsingErrorType.SUCH_THAT_CLAUSE)
     return SimpleGroupCondition(
@@ -610,31 +589,10 @@ def split_by_logical_operator(condition: str, operator: LogicalOperator) -> list
 
 
 def parse_condition_value(column_dtype: np.dtype, operator: str, value: str, columns: dict[str, np.dtype], condition: str, error_type=ParsingErrorType.SELECT_CLAUSE or ParsingErrorType.SUCH_THAT_CLAUSE) -> tuple[float | bool | str | date, bool]:
-    ''''
-    Parse the comparison value in a condition.
-    
-    Parameters:
-        column_dtype: The data type of the column on the left side of the comparison.
-        operator: The string of the operator in the comnparison.
-        value: The string of the value on the right side of the comparison.
-        columns: Dictionary of available columns.
-        condition: The full condition for error messages.
-        error_type: The type of error to raise.
-
-    Returns:
-        (float | bool | str | date, bool): The parsed value and a boolean indicating if it's a column reference for emf.
-    
-    Raises:
-        ParsingError when the value is invalid.
-    '''
     date_pattern = r"^['\"]\d{4}[-/]\d{1,2}[-/]\d{1,2}['\"]$"
     value = value.strip()
     
-    # when implementing EMF, look for a good way to determine if an equation is EMF
-    '''
-    if any(col in value.split() for col in columns):
-       return parse_emf_condition_value(value)
-    '''
+    #TODO implement EMF parsing here
     if operator in ['>=', '<=', '>', '<']:
         if re.match(date_pattern, value) and pd.api.types.is_datetime64_any_dtype(column_dtype):
             try:
@@ -643,7 +601,8 @@ def parse_condition_value(column_dtype: np.dtype, operator: str, value: str, col
                 raise ParsingError(error_type, f"Invalid date in condition: '{condition}'")
         elif pd.api.types.is_numeric_dtype(column_dtype):
             try:
-                return ne.evaluate(value), False
+                value = float(value)
+                return int(value) if value.is_integer() else value, False
             except Exception:
                 raise ParsingError(error_type, f"Invalid value in condition: '{condition}'")
         raise ParsingError(error_type, f"Invalid column reference or value in condition: '{condition}'")
@@ -661,7 +620,8 @@ def parse_condition_value(column_dtype: np.dtype, operator: str, value: str, col
             return value[1:-1], False
         elif pd.api.types.is_numeric_dtype(column_dtype):
             try:
-                return ne.evaluate(value), False
+                value = float(value)
+                return int(value) if value.is_integer() else value, False
             except Exception:
                 raise ParsingError(error_type, f"Invalid value in condition: '{condition}'")
         raise ParsingError(error_type, f"Invalid column reference or value in condition: '{condition}'")
@@ -671,37 +631,13 @@ def parse_condition_value(column_dtype: np.dtype, operator: str, value: str, col
 
 #TODO: Implement to handle parsing of EMF values
 # Should be able to handle numeric euquations (i.e col = col + 1) 
-def parse_emf_condition_value(value: str):
-    '''
-    if is_emf:
-        if (pd.api.types.is_datetime64_any_dtype(columns[value]) and pd.api.types.is_datetime64_any_dtype(column_dtype)) \
-            or (pd.api.types.is_numeric_dtype(columns[value]) and pd.api.types.is_numeric_dtype(column_dtype)) \
-            or (pd.api.types.is_bool_dtype(columns[value]) and pd.api.types.is_bool_dtype(column_dtype)) \
-            or (pd.api.types.is_string_dtype(columns[value]) and pd.api.types.is_string_dtype(column_dtype)):
-            return value, True 
-    
-        if is_emf:
-            if (pd.api.types.is_datetime64_any_dtype(columns[value]) and pd.api.types.is_datetime64_any_dtype(column_dtype)) \
-                or (pd.api.types.is_numeric_dtype(columns[value]) and pd.api.types.is_numeric_dtype(column_dtype)):
-                return value, True
-            raise ParsingError(error_type, f"Invalid column referance for comparison in condition: '{condition}'")
-    '''
+def parse_emf_condition_value(value: str): 
     return value, True
 
 
 def has_wrapping_parenthesis(condition: str) -> bool:
-    '''
-    Check if a condition has wrapping parentheses.
-
-    Parameters:
-        condition: The condition string.
-
-    Returns:
-        bool: True if the condition is wrapped in parentheses
-    '''
     if not (condition.startswith('(') and condition.endswith(')')):
         return False
-    
     paren_level = 0
     for i, char in enumerate(condition):
         if char == '(':

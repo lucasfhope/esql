@@ -5,8 +5,8 @@ from datetime import date
 import pprint
 
 from src.esql.main import _enforce_allowed_dtypes
-from src.esql.parser.util import get_keyword_clauses, parse_select_clause, parse_where_clause
-from src.esql.parser.types import ParsedSelectClause, AggregatesDict, GlobalAggregate, GroupAggregate, ParsedWhereClause, LogicalOperator, SimpleCondition, CompoundCondition, NotCondition
+from src.esql.parser.util import get_keyword_clauses, parse_select_clause, parse_where_clause, parse_such_that_clause
+from src.esql.parser.types import ParsedSelectClause, AggregatesDict, GlobalAggregate, GroupAggregate, ParsedWhereClause, LogicalOperator, SimpleCondition, CompoundCondition, NotCondition, SimpleGroupCondition, CompoundGroupCondition, NotGroupCondition, ParsedSuchThatClause
 from src.esql.parser.error import ParsingError, ParsingErrorType
 
 @pytest.fixture
@@ -315,6 +315,68 @@ def test_parse_where_clause_raises_error_for_invalid_values(columns: dict[str, n
             )
         assert parsingError.value.error_type == ParsingErrorType.WHERE_CLAUSE and any(error in parsingError.value.message for error in ["Invalid value", "Invalid column reference"])
             
+###########################################################################
+# PARSE_SUCH_THAT_CLAUSE TESTS
+###########################################################################
+def test_parse_such_that_clause_returns_expected_structure_with_logical_operators(columns: dict[str, np.dtype]):
+    parsedSuchThatClause = parse_such_that_clause(
+        such_that_clause="1.cust = 'Sam' or not (1.year = 2020 and not 1.credit)",
+        groups=['1','2','3'],
+        columns=columns
+    )
+    expected: ParsedSuchThatClause = CompoundGroupCondition(
+        operator=LogicalOperator.OR,
+        conditions=[
+            SimpleCondition(
+                group='1',
+                column='cust',
+                operator='=',
+                value='Sam',
+                is_emf=False
+            ),
+            NotGroupCondition(
+                operator=LogicalOperator.NOT,
+                condition=CompoundGroupCondition(
+                    operator=LogicalOperator.AND,
+                    conditions=[
+                        SimpleGroupCondition(
+                            group='1',
+                            column='year',
+                            operator='=',
+                            value=2020,
+                            is_emf=False
+                        ),
+                        NotGroupCondition(
+                            operator=LogicalOperator.NOT,
+                            condition=SimpleCondition(
+                                group='1',
+                                column='credit',
+                                operator='=',
+                                value=True,
+                                is_emf=False
+                            )
+                        )
+                    ]
+                )
+            )
+        ]
+    )
+    assert parsedSuchThatClause == expected
 
+def test_parse_such_that_clause_raises_error_for_multiple_groups_in_a_clause(columns: dict[str, np.dtype]):
+    with pytest.raises(ParsingError) as parsingError:
+        parse_such_that_clause(
+            such_that_clause="1.year = 2020 and 2.credit",
+            groups=['1','2'],
+            columns=columns
+        )
+    assert parsingError.value.error_type == ParsingErrorType.SUCH_THAT_CLAUSE and "Multiple groups" in parsingError.value.message 
 
-
+def test_parse_such_that_clause_raises_error_for_invalid_group(columns: dict[str, np.dtype]):
+    with pytest.raises(ParsingError) as parsingError:
+        parse_such_that_clause(
+            such_that_clause="2.year = 2020 and 2.credit",
+            groups=['1'],
+            columns=columns
+        )
+    assert parsingError.value.error_type == ParsingErrorType.SUCH_THAT_CLAUSE and "No valid group" in parsingError.value.message 

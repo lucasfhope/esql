@@ -12,7 +12,6 @@ PARSING ERROR
 class GlobalAggregate(TypedDict):
     column: str
     function: str
-    datatype: float
 
 class GroupAggregate(GlobalAggregate):
     group: str
@@ -70,31 +69,30 @@ ParsedSuchThatClause = Union[SimpleGroupCondition, CompoundGroupCondition, NotGr
 
 
 
-class GlobalHavingCondition(TypedDict):
-    column: str
-    function: str
+class GlobalAggregateCondition(TypedDict):
+    aggregate: GlobalAggregate
     operator: str
     value: float   
 
-class GroupHavingCondition(GlobalHavingCondition):
-    group: str
+class GroupAggregateCondition(GlobalAggregateCondition):
+    aggregate: GroupAggregate
 
 # Compound condition for HAVING clause using AND/OR.
-class CompoundHavingCondition(TypedDict):
-    operator: Literal["AND", "OR"]
+class CompoundAggregateCondition(TypedDict):
+    operator: List['ConditionType']
     conditions: List["ParsedHavingClause"]
 
 # NOT condition that wraps a single condition.
-class NotHavingCondition(TypedDict):
-    operator: Literal["NOT"]
+class NotAggregateCondition(TypedDict):
+    operator: Literal[LogicalOperator.NOT]
     condition: "ParsedHavingClause"
 
 # Union of all possible HAVING clause condition types.
 ParsedHavingClause = Union[
-    GlobalHavingCondition,
-    GroupHavingCondition,
-    CompoundHavingCondition,
-    NotHavingCondition
+    GlobalAggregateCondition,
+    GroupAggregateCondition,
+    CompoundAggregateCondition,
+    NotAggregateCondition
 ]
 
 

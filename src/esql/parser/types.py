@@ -12,9 +12,13 @@ PARSING ERROR
 class GlobalAggregate(TypedDict):
     column: str
     function: str
+    def __eq__(self, other):
+        return self.column == other.column and self.function == other.function
 
 class GroupAggregate(GlobalAggregate):
     group: str
+    def __eq__(self, other):
+        return self.group == other.group and self.column == other.column and self.function == other.function
 
 class AggregatesDict(TypedDict):
     global_scope: List[GlobalAggregate]

@@ -63,10 +63,10 @@ def get_keyword_clauses(query: str) -> dict[str, str]:
 ###########################################################################
 def parse_select_clause(select_clause: str, groups: list[str], columns: dict[str, np.dtype]) -> ParsedSelectClause:
     columns_list: str = []
-    aggregates: AggregatesDict = {
-        "global_scope": [],
-        "group_specific": []
-    }
+    aggregates= AggregatesDict(
+        global_scope=[],
+        group_specific=[]
+    )
     
     for item in (s.strip() for s in select_clause.split(',')):
         if '.' in item:
@@ -81,10 +81,10 @@ def parse_select_clause(select_clause: str, groups: list[str], columns: dict[str
             else:
                 raise ParsingError(ParsingErrorType.SELECT_CLAUSE, f"Invalid column: '{item}'")
 
-    return {
-        'columns': columns_list,
-        'aggregates': aggregates
-    }
+    return ParsedSelectClause(
+        columns=columns_list,
+        aggregates=aggregates
+    )
 
 
 ###########################################################################
@@ -259,7 +259,7 @@ def parse_simple_group_condition(condition: str, group: str, columns: dict[str, 
 ###########################################################################
 # HAVING Clause Parsing
 ###########################################################################
-def parse_having_clause(having_clause: str, groups: list[str], columns: dict[str, np.dtype]) -> ParsedHavingClause:
+def parse_having_clause(having_clause: str, groups: list[str], columns: dict[str, np.dtype]) -> tuple[ParsedHavingClause, AggregatesDict]:
     having_clause = having_clause.strip()
     if has_wrapping_parenthesis(having_clause):
         return parse_having_clause(having_clause[1:-1].strip(), groups, columns)
@@ -327,20 +327,6 @@ def parse_aggregate_condition(condition: str, groups: list[str], columns: dict[s
 # Helper Functions
 ###########################################################################
 def parse_aggregate(aggregate: str, groups: list[str], columns: dict[str, np.dtype], error_type=ParsingErrorType.SELECT_CLAUSE or ParsingErrorType.HAVING_CLAUSE) -> GlobalAggregate | GroupAggregate:
-    '''
-    Parse an aggregate expression using dot notation (e.g., column.agg or group.column.agg).
-
-    Parameters:
-        aggregate: The aggregate expression.
-        groups: List of valid group identifiers.
-        columns: Dictionary of available columns.
-
-    Returns:
-        GlobalAggregate | GroupAggregate: The parsed aggregate.
-    
-    Raises:
-        ParsingError the aggregate is invalid.
-    '''
     AGGREGATE_FUNCTIONS = ['sum','avg','min', 'max', 'count']
     parts = aggregate.split('.')
 

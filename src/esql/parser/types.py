@@ -41,19 +41,21 @@ class SimpleCondition(TypedDict):
     column: str
     operator: str
     value: Union[float, bool, str, date]
-    # EMF is when the comparison value is based on the entry value of the column.
-    is_emf: bool                            
+    is_emf: bool  # EMF is when the comparison value is based on the entry value of the column.                      
 
 class CompoundCondition(TypedDict):
     operator: Literal[LogicalOperator.AND, LogicalOperator.OR]
-    conditions: List['ConditionType']
+    conditions: List['ParsedWhereClause']
 
 class NotCondition(TypedDict):
     operator: Literal[LogicalOperator.NOT]
-    condition: 'ConditionType'
-
-ConditionType = SimpleCondition | CompoundCondition | NotCondition
-ParsedWhereClause = ConditionType
+    condition: 'ParsedWhereClause'
+    
+ParsedWhereClause = (
+    SimpleCondition |
+    CompoundCondition |
+    NotCondition
+)
 
 
 class SimpleGroupCondition(SimpleCondition):
@@ -65,7 +67,11 @@ class CompoundGroupCondition(CompoundCondition):
 class NotGroupCondition(NotCondition):
     condition: 'ParsedSuchThatClause'
 
-ParsedSuchThatClause = Union[SimpleGroupCondition, CompoundGroupCondition, NotGroupCondition]
+ParsedSuchThatClause = (
+    SimpleGroupCondition |
+    CompoundGroupCondition |
+    NotGroupCondition
+)
 
 
 
@@ -88,12 +94,12 @@ class NotAggregateCondition(TypedDict):
     condition: "ParsedHavingClause"
 
 # Union of all possible HAVING clause condition types.
-ParsedHavingClause = Union[
-    GlobalAggregateCondition,
-    GroupAggregateCondition,
-    CompoundAggregateCondition,
+ParsedHavingClause = (
+    GlobalAggregateCondition |
+    GroupAggregateCondition |
+    CompoundAggregateCondition |
     NotAggregateCondition
-]
+)
 
 
 

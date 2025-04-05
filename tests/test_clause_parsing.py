@@ -4,7 +4,7 @@ import numpy as np
 from datetime import date
 
 from src.esql.main import _enforce_allowed_dtypes
-from src.esql.parser.util import get_keyword_clauses, parse_select_clause, parse_where_clause, parse_such_that_clause, parse_having_clause
+from src.esql.parser.util import get_keyword_clauses, parse_select_clause, parse_over_clause, parse_where_clause, parse_such_that_clause, parse_having_clause
 from src.esql.parser.types import ParsedSelectClause, AggregatesDict, GlobalAggregate, GroupAggregate, ParsedWhereClause, LogicalOperator, SimpleCondition, CompoundCondition, NotCondition, SimpleGroupCondition, CompoundGroupCondition, NotGroupCondition, ParsedSuchThatClause, CompoundAggregateCondition, NotAggregateCondition, GlobalAggregateCondition, GroupAggregateCondition
 from src.esql.parser.error import ParsingError, ParsingErrorType
 
@@ -70,6 +70,38 @@ def test_get_keyword_clauses_raises_clause_order_error():
             query="SELECT cust WHERE quant > 10 OVER bad, good  SUCH THAT  HAVING good.quant.sum > 100 and bad.quant.sum < 100 and better order by 2".lower()
         )
     assert parsingError.value.error_type == ParsingErrorType.CLAUSE_ORDER and "WHERE" in parsingError.value.message
+
+
+###########################################################################
+# PARSE_OVER_CLAUSE TESTS
+###########################################################################
+def test_parse_over_clause_returns_expected_structure(columns: dict[str, np.dtype]):
+    parsedOverClause = parse_over_clause(
+        over_clause="Apples  ,   132537aaGGG, ___yuetsg___8   ,   728x2fegoql,   GGGGGGHHHHH_____   "
+    )
+    expected = [
+        "Apples",
+        "132537aaGGG",
+        "___yuetsg___8",
+        "728x2fegoql",
+        "GGGGGGHHHHH_____"
+    ]
+    assert parsedOverClause == expected
+
+def test_parse_over_clause_raises_error_for_invalid_characters(columns: dict[str, np.dtype]):
+    invalid_groups = [
+        "aa)hhhd",
+        "$teven",
+        "#678",
+        "[george]",
+        "wow!"
+    ]
+    for group in invalid_groups:
+        with pytest.raises(ParsingError) as parsingError:
+            parsedOverClause = parse_over_clause(
+                over_clause=f"{group}"
+            )
+        assert parsingError.value.error_type == ParsingErrorType.OVER_CLAUSE
 
     
 ###########################################################################
@@ -382,7 +414,7 @@ def test_parse_such_that_clause_raises_error_for_invalid_group(columns: dict[str
 
 
 ###########################################################################
-# PARSE_WHERE_CLAUSE TESTS
+# PARSE_HAVING_CLAUSE TESTS
 ###########################################################################
 def test_parse_having_clause_returns_expected_structure_with_logical_operators(columns: dict[str, np.dtype]):
     parsedHavingClause, _ = parse_having_clause(

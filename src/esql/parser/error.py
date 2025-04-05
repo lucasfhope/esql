@@ -3,6 +3,7 @@ from enum import Enum
 
 class ParsingErrorType(Enum):
     SELECT_CLAUSE = "SELECT CLAUSE"
+    OVER_CLAUSE = "OVER CLAUSE"
     WHERE_CLAUSE = "WHERE CLAUSE"
     SUCH_THAT_CLAUSE = "SUCH THAT CLAUSE"
     HAVING_CLAUSE = "HAVING CLAUSE"

@@ -57,6 +57,19 @@ def get_keyword_clauses(query: str) -> dict[str, str]:
             
     return keyword_clauses
 
+###########################################################################
+# OVER Clause Parsing
+###########################################################################
+def parse_over_clause(over_clause: str) -> list[str]:
+    groups = []
+    pattern = r"^[a-zA-Z0-9_]+$"
+    for group in (g.strip() for g in over_clause.split(",")):
+        match = re.match(pattern, group)
+        if not match:
+            raise ParsingError(ParsingErrorType.OVER_CLAUSE, f"Invalid group name: '{group}")
+        groups.append(group)
+    return groups
+
 
 ###########################################################################
 # SELECT Clause Parsing
@@ -351,61 +364,9 @@ def parse_aggregate_condition(condition: str, aggregates: AggregatesDict, groups
     )
 
 
-
 ###########################################################################
-# Helper Functions
+# Aggregate and Value Parsing
 ###########################################################################
-def find_conditional_operator(condition: str) -> re.Match | None:
-    CONDITIONAL_OPERATORS = ['>=', '<=', '!=', '==', '>', '<', '=']
-    operator_pattern = r'\s*(' + '|'.join(re.escape(op) for op in CONDITIONAL_OPERATORS) + r')\s*'
-    match = re.search(operator_pattern, condition)
-    return match
-
-
-def has_wrapping_parenthesis(condition: str) -> bool:
-    if not (condition.startswith('(') and condition.endswith(')')):
-        return False
-    paren_level = 0
-    for i, char in enumerate(condition):
-        if char == '(':
-            paren_level += 1
-        elif char == ')':
-            paren_level -= 1
-        if paren_level == 0 and i < len(condition) - 1:
-            return False
-    return True
-
-
-def split_by_logical_operator(condition: str, operator: LogicalOperator) -> list[str]:
-    parts = []
-    current = ''
-    paren_level = 0
-    i = 0
-    while i < len(condition):
-        char = condition[i]
-        if char == '(':
-            paren_level += 1
-        elif char == ')':
-            paren_level -= 1
-
-        # Check for the operator only when not inside parentheses.
-        if (char == ' ' 
-            and i + 1 + len(operator.value) <= len(condition) 
-            and condition[i + 1:i + 1 + len(operator.value)].lower() == operator.value.lower()
-            and paren_level == 0):
-            parts.append(current.strip())
-            current = ''
-            i += len(operator.value) + 1
-        else:
-            current += char
-            i += 1
-
-    if current.strip():
-        parts.append(current.strip())
-
-    return parts
-
-
 def parse_aggregate(aggregate: str, groups: list[str], columns: dict[str, np.dtype], error_type=ParsingErrorType.SELECT_CLAUSE or ParsingErrorType.HAVING_CLAUSE) -> GlobalAggregate | GroupAggregate:
     AGGREGATE_FUNCTIONS = ['sum','avg','min', 'max', 'count']
     parts = aggregate.split('.')
@@ -489,6 +450,60 @@ def parse_condition_value(column_dtype: np.dtype, operator: str, value: str, col
 # Should be able to handle numeric euquations (i.e col = col + 1) 
 def parse_emf_condition_value(value: str): 
     pass
+
+
+###########################################################################
+# Clause Structure Helper Functions
+###########################################################################
+def find_conditional_operator(condition: str) -> re.Match | None:
+    CONDITIONAL_OPERATORS = ['>=', '<=', '!=', '==', '>', '<', '=']
+    operator_pattern = r'\s*(' + '|'.join(re.escape(op) for op in CONDITIONAL_OPERATORS) + r')\s*'
+    match = re.search(operator_pattern, condition)
+    return match
+
+
+def has_wrapping_parenthesis(condition: str) -> bool:
+    if not (condition.startswith('(') and condition.endswith(')')):
+        return False
+    paren_level = 0
+    for i, char in enumerate(condition):
+        if char == '(':
+            paren_level += 1
+        elif char == ')':
+            paren_level -= 1
+        if paren_level == 0 and i < len(condition) - 1:
+            return False
+    return True
+
+
+def split_by_logical_operator(condition: str, operator: LogicalOperator) -> list[str]:
+    parts = []
+    current = ''
+    paren_level = 0
+    i = 0
+    while i < len(condition):
+        char = condition[i]
+        if char == '(':
+            paren_level += 1
+        elif char == ')':
+            paren_level -= 1
+
+        # Check for the operator only when not inside parentheses.
+        if (char == ' ' 
+            and i + 1 + len(operator.value) <= len(condition) 
+            and condition[i + 1:i + 1 + len(operator.value)].lower() == operator.value.lower()
+            and paren_level == 0):
+            parts.append(current.strip())
+            current = ''
+            i += len(operator.value) + 1
+        else:
+            current += char
+            i += 1
+
+    if current.strip():
+        parts.append(current.strip())
+
+    return parts
 
 
 

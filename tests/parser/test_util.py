@@ -345,7 +345,21 @@ def test_parse_where_clause_raises_error_for_invalid_values(columns: dict[str, n
                 columns=columns
             )
         assert parsingError.value.error_type == ParsingErrorType.WHERE_CLAUSE and any(error in parsingError.value.message for error in ["Invalid value", "Invalid column reference"])
-            
+
+
+def test_parse_where_clause_raises_error_for_double_logical_operators(columns: dict[str, np.dtype]):
+    invalid_clauses = [
+        "cust = 'Dan' or or month = 7",
+        "cust = 'Dan' and and month = 7"
+    ]
+    for invalid_clause in invalid_clauses:
+        with pytest.raises(ParsingError) as parsingError:
+            parsed_where_clause = parse_where_clause(
+                where_clause=invalid_clause,
+                columns=columns
+            )
+        assert parsingError.value.error_type == ParsingErrorType.WHERE_CLAUSE
+
 ###########################################################################
 # PARSE_SUCH_THAT_CLAUSE TESTS
 ###########################################################################
@@ -633,5 +647,11 @@ def test_order_by_clause_raises_error_for_out_of_range_inputs():
                 number_of_select_columns=3
             )
         assert parsingError.value.error_type == ParsingErrorType.ORDER_BY_CLAUSE and "Value out of range" in parsingError.value.message
+
+
+
+
+if __name__ == '__main__':
+   pytest.main()
 
 

@@ -1,6 +1,7 @@
 from typing import TypedDict, Union, Literal, List, Dict, Tuple
 from enum import Enum
 from datetime import date
+import pandas as pd
 
 
 '''
@@ -116,9 +117,14 @@ ParsedHavingClause = (
 
 
 class ParsedQuery(TypedDict):
+    data: pd.DataFrame
     select: ParsedSelectClause
-    over_groups: list[str]
+    over: list[str]
     where: ParsedWhereClause
+    such_that: list[ParsedSuchThatClause]
+    having: ParsedHavingClause
+    order_by: int
+    aggregates: AggregatesDict
 
 
 

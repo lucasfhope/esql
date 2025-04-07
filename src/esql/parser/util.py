@@ -365,6 +365,19 @@ def parse_aggregate_condition(condition: str, aggregates: AggregatesDict, groups
 
 
 ###########################################################################
+# ORDER BY Clause Parsing
+###########################################################################
+def parse_order_by_clause(order_by_clause: str, number_of_select_columns: int):
+    try:
+        order_value = int(order_by_clause.strip())  
+    except ValueError:
+        raise ParsingError(ParsingErrorType.ORDER_BY_CLAUSE, f"Invalid value: '{order_by_clause}'")
+    if order_value < 1 or order_value > number_of_select_columns:
+        raise ParsingError(ParsingErrorType.ORDER_BY_CLAUSE, f"Value out of range of selected columns: '{order_by_clause}'")
+    return order_value
+
+
+###########################################################################
 # Aggregate and Value Parsing
 ###########################################################################
 def parse_aggregate(aggregate: str, groups: list[str], columns: dict[str, np.dtype], error_type=ParsingErrorType.SELECT_CLAUSE or ParsingErrorType.HAVING_CLAUSE) -> GlobalAggregate | GroupAggregate:

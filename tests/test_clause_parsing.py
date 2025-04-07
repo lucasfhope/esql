@@ -4,7 +4,7 @@ import numpy as np
 from datetime import date
 
 from src.esql.main import _enforce_allowed_dtypes
-from src.esql.parser.util import get_keyword_clauses, parse_select_clause, parse_over_clause, parse_where_clause, parse_such_that_clause, parse_having_clause
+from src.esql.parser.util import get_keyword_clauses, parse_select_clause, parse_over_clause, parse_where_clause, parse_such_that_clause, parse_having_clause, parse_order_by_clause
 from src.esql.parser.types import ParsedSelectClause, AggregatesDict, GlobalAggregate, GroupAggregate, ParsedWhereClause, LogicalOperator, SimpleCondition, CompoundCondition, NotCondition, SimpleGroupCondition, CompoundGroupCondition, NotGroupCondition, ParsedSuchThatClause, CompoundAggregateCondition, NotAggregateCondition, GlobalAggregateCondition, GroupAggregateCondition
 from src.esql.parser.error import ParsingError, ParsingErrorType
 
@@ -75,7 +75,7 @@ def test_get_keyword_clauses_raises_clause_order_error():
 ###########################################################################
 # PARSE_OVER_CLAUSE TESTS
 ###########################################################################
-def test_parse_over_clause_returns_expected_structure(columns: dict[str, np.dtype]):
+def test_parse_over_clause_returns_expected_structure():
     parsedOverClause = parse_over_clause(
         over_clause="Apples  ,   132537aaGGG, ___yuetsg___8   ,   728x2fegoql,   GGGGGGHHHHH_____   "
     )
@@ -88,7 +88,7 @@ def test_parse_over_clause_returns_expected_structure(columns: dict[str, np.dtyp
     ]
     assert parsedOverClause == expected
 
-def test_parse_over_clause_raises_error_for_invalid_characters(columns: dict[str, np.dtype]):
+def test_parse_over_clause_raises_error_for_invalid_characters():
     invalid_groups = [
         "aa)hhhd",
         "$teven",
@@ -587,3 +587,51 @@ def test_parse_having_clause_raises_error_for_non_numeric_comparison_value(colum
                 columns=columns
             )
         assert parsingError.value.error_type == ParsingErrorType.HAVING_CLAUSE and "Invalid value" in parsingError.value.message
+
+
+###########################################################################
+# PARSE_ORDER_BY_CLAUSE TESTS
+###########################################################################
+def test_order_by_clause_returns_expected_structure():
+    parsedOrderByClause = parse_order_by_clause(
+        order_by_clause="3",
+        number_of_select_columns=3
+    )
+    expected = 3
+    assert parsedOrderByClause == expected
+
+
+def test_order_by_clause_raises_error_for_non_number_input():
+    with pytest.raises(ParsingError) as parsingError:
+        parse_order_by_clause(
+            order_by_clause="apple",
+            number_of_select_columns=3
+        )
+    assert parsingError.value.error_type == ParsingErrorType.ORDER_BY_CLAUSE and "Invalid value" in parsingError.value.message
+
+def test_order_by_clause_raises_error_for_non_integer_input():
+    with pytest.raises(ParsingError) as parsingError:
+        parse_order_by_clause(
+            order_by_clause="2.3",
+            number_of_select_columns=3
+        )
+    assert parsingError.value.error_type == ParsingErrorType.ORDER_BY_CLAUSE and "Invalid value" in parsingError.value.message
+
+def test_order_by_clause_raises_error_for_out_of_range_inputs():
+    out_of_range_values = [
+        "0",
+        "-1",
+        "4",
+        "1001",
+        "-543578",
+        "7"
+    ]
+    for value in out_of_range_values:
+        with pytest.raises(ParsingError) as parsingError:
+            parse_order_by_clause(
+                order_by_clause=value,
+                number_of_select_columns=3
+            )
+        assert parsingError.value.error_type == ParsingErrorType.ORDER_BY_CLAUSE and "Value out of range" in parsingError.value.message
+
+

@@ -76,7 +76,6 @@ def _build_parsed_query(data: pd.DataFrame, query: str) -> ParsedQuery:
     )
 
     aggregates.update(parsed_select_clause['aggregates'])
-    
     return ParsedQuery(
         data=data,
         select=parsed_select_clause,

@@ -2,7 +2,6 @@ import re
 import numpy as np
 import pandas as pd
 from datetime import datetime, date
-import numexpr as ne
 
 from src.esql.parser.error import ParsingError, ParsingErrorType
 from src.esql.parser.types import ParsedSelectClause, GlobalAggregate, GroupAggregate, AggregatesDict, ParsedWhereClause, SimpleCondition, CompoundCondition, NotCondition, LogicalOperator, ParsedSuchThatClause, SimpleGroupCondition, CompoundGroupCondition, NotGroupCondition, ParsedHavingClause, CompoundAggregateCondition, NotAggregateCondition, GlobalAggregateCondition, GroupAggregateCondition
@@ -83,7 +82,7 @@ def parse_select_clause(select_clause: str, groups: list[str], columns: dict[str
     
     for item in (s.strip() for s in select_clause.split(',')):
         if '.' in item:
-            aggregate_result = parse_aggregate(item, groups, columns, ParsingErrorType.SELECT_CLAUSE)
+            aggregate_result = _parse_aggregate(item, groups, columns, ParsingErrorType.SELECT_CLAUSE)
             if 'group' in aggregate_result:
                 aggregates['group_specific'].append(aggregate_result)
             else:
@@ -105,17 +104,17 @@ def parse_select_clause(select_clause: str, groups: list[str], columns: dict[str
 ###########################################################################
 def parse_where_clause(where_clause: str, columns: dict[str, np.dtype]) -> ParsedWhereClause:
     where_clause = where_clause.strip()
-    if has_wrapping_parenthesis(where_clause):
+    if _has_wrapping_parenthesis(where_clause):
         return parse_where_clause(where_clause[1:-1].strip(), columns)
 
-    or_conditions = split_by_logical_operator(where_clause, LogicalOperator.OR)
+    or_conditions = _split_by_logical_operator(where_clause, LogicalOperator.OR)
     if len(or_conditions) > 1:
         return CompoundCondition(
             operator=LogicalOperator.OR,
             conditions=[parse_where_clause(cond, columns) for cond in or_conditions]
         )
 
-    and_conditions = split_by_logical_operator(where_clause, LogicalOperator.AND)
+    and_conditions = _split_by_logical_operator(where_clause, LogicalOperator.AND)
     if len(and_conditions) > 1:
         return CompoundCondition(
             operator=LogicalOperator.AND,
@@ -129,12 +128,12 @@ def parse_where_clause(where_clause: str, columns: dict[str, np.dtype]) -> Parse
             condition=parse_where_clause(condition, columns)
         )     
     
-    return parse_simple_condition(where_clause, columns)
+    return _parse_simple_condition(where_clause, columns)
 
 
-def parse_simple_condition(condition: str, columns: dict[str, np.dtype]) -> SimpleCondition:
+def _parse_simple_condition(condition: str, columns: dict[str, np.dtype]) -> SimpleCondition:
     condition = condition.strip()
-    match = find_conditional_operator(condition)
+    match = _find_conditional_operator(condition)
     if not match:
         if condition in columns and pd.api.types.is_bool_dtype(columns[condition]):
             return SimpleCondition(
@@ -158,7 +157,7 @@ def parse_simple_condition(condition: str, columns: dict[str, np.dtype]) -> Simp
     if operator and value == '':
         raise ParsingError(ParsingErrorType.WHERE_CLAUSE, f"Missing value for condition: {condition}")
     
-    value, is_emf = parse_condition_value(columns[column], operator, value, columns, condition, ParsingErrorType.WHERE_CLAUSE)
+    value, is_emf = _parse_condition_value(columns[column], operator, value, columns, condition, ParsingErrorType.WHERE_CLAUSE)
     return SimpleCondition(
         column=column,
         operator=operator,
@@ -172,10 +171,10 @@ def parse_simple_condition(condition: str, columns: dict[str, np.dtype]) -> Simp
 ###########################################################################
 def parse_such_that_clause(such_that_clause: str, groups: list[str], columns: dict[str, np.dtype]) -> ParsedSuchThatClause:
     such_that_clause = such_that_clause.strip()
-    if has_wrapping_parenthesis(such_that_clause):
+    if _has_wrapping_parenthesis(such_that_clause):
         return parse_such_that_clause(such_that_clause[1:-1].strip(), groups, columns)
 
-    or_conditions = split_by_logical_operator(such_that_clause, LogicalOperator.OR)
+    or_conditions = _split_by_logical_operator(such_that_clause, LogicalOperator.OR)
     if len(or_conditions) > 1:
         parsed_or_conditions = [parse_such_that_clause(cond, groups, columns) for cond in or_conditions]
         groups_found = {groupCondition['group'] for groupCondition in parsed_or_conditions if 'group' in groupCondition}
@@ -186,7 +185,7 @@ def parse_such_that_clause(such_that_clause: str, groups: list[str], columns: di
             conditions=parsed_or_conditions
         )
 
-    and_conditions = split_by_logical_operator(such_that_clause, LogicalOperator.AND)
+    and_conditions = _split_by_logical_operator(such_that_clause, LogicalOperator.AND)
     if len(and_conditions) > 1:
         parsed_and_conditions = [parse_such_that_clause(cond, groups, columns) for cond in and_conditions]
         groups_found = {groupCondition['group'] for groupCondition in parsed_and_conditions if 'group' in groupCondition}
@@ -215,12 +214,12 @@ def parse_such_that_clause(such_that_clause: str, groups: list[str], columns: di
     if any(other_group + '.' in such_that_clause for other_group in groups if other_group != group_found):
         raise ParsingError(ParsingErrorType.SUCH_THAT_CLAUSE, f"Multiple groups found in a clause: '{such_that_clause}'\nEach comma seperated clause must contain only one group.")
     
-    return parse_simple_group_condition(such_that_clause, group_found, columns)
+    return _parse_simple_group_condition(such_that_clause, group_found, columns)
     
 
-def parse_simple_group_condition(condition: str, group: str, columns: dict[str, np.dtype]) -> SimpleGroupCondition:
+def _parse_simple_group_condition(condition: str, group: str, columns: dict[str, np.dtype]) -> SimpleGroupCondition:
     condition = condition.strip()
-    match = find_conditional_operator(condition)
+    match = _find_conditional_operator(condition)
     if not match:
         if condition.startswith(group + '.'):
             column = condition[len(group) + 1:].strip()
@@ -249,7 +248,7 @@ def parse_simple_group_condition(condition: str, group: str, columns: dict[str, 
     if operator and value == '':
         raise ParsingError(ParsingErrorType.SUCH_THAT_CLAUSE, f"Missing value for condition: {condition}")
 
-    value, is_emf = parse_condition_value(columns[column], operator, value, columns, condition, ParsingErrorType.SUCH_THAT_CLAUSE)
+    value, is_emf = _parse_condition_value(columns[column], operator, value, columns, condition, ParsingErrorType.SUCH_THAT_CLAUSE)
     return SimpleGroupCondition(
         group=group,
         column=column,
@@ -263,7 +262,7 @@ def parse_simple_group_condition(condition: str, group: str, columns: dict[str, 
 # HAVING Clause Parsing
 ###########################################################################
 def parse_having_clause(having_clause: str, groups: list[str], columns: dict[str, np.dtype]) -> tuple[ParsedHavingClause, AggregatesDict]:
-    return parse_having_clause_recursive(
+    return _parse_having_clause_recursive(
         having_clause=having_clause,
         aggregates=AggregatesDict(
             global_scope=[],
@@ -274,16 +273,16 @@ def parse_having_clause(having_clause: str, groups: list[str], columns: dict[str
     )
 
 
-def parse_having_clause_recursive(having_clause: str, aggregates: AggregatesDict, groups: list[str], columns: dict[str, np.dtype]) -> tuple[ParsedHavingClause, AggregatesDict]:
+def _parse_having_clause(having_clause: str, aggregates: AggregatesDict, groups: list[str], columns: dict[str, np.dtype]) -> tuple[ParsedHavingClause, AggregatesDict]:
     having_clause = having_clause.strip()
-    if has_wrapping_parenthesis(having_clause):
-        return parse_having_clause_recursive(having_clause[1:-1].strip(), aggregates, groups, columns)
+    if _has_wrapping_parenthesis(having_clause):
+        return _parse_having_clause(having_clause[1:-1].strip(), aggregates, groups, columns)
 
-    or_conditions = split_by_logical_operator(having_clause, LogicalOperator.OR)
+    or_conditions = _split_by_logical_operator(having_clause, LogicalOperator.OR)
     if len(or_conditions) > 1:
         conditions = []
         for condition in or_conditions:
-            cond, aggregates = parse_having_clause_recursive(condition, aggregates, groups, columns)
+            cond, aggregates = _parse_having_clause(condition, aggregates, groups, columns)
             conditions.append(cond)
         return (
             CompoundAggregateCondition(
@@ -293,11 +292,11 @@ def parse_having_clause_recursive(having_clause: str, aggregates: AggregatesDict
             aggregates
         )
             
-    and_conditions = split_by_logical_operator(having_clause, LogicalOperator.AND)
+    and_conditions = _split_by_logical_operator(having_clause, LogicalOperator.AND)
     if len(and_conditions) > 1:
         conditions = []
         for condition in and_conditions:
-            cond, aggregates = parse_having_clause_recursive(condition, aggregates, groups, columns)
+            cond, aggregates = _parse_having_clause(condition, aggregates, groups, columns)
             conditions.append(cond)
         return (
             CompoundAggregateCondition(
@@ -309,7 +308,7 @@ def parse_having_clause_recursive(having_clause: str, aggregates: AggregatesDict
 
     if having_clause.lower().startswith(LogicalOperator.NOT.value.lower()+' '):
         having_clause = having_clause[len(LogicalOperator.NOT.value)+1:].strip()
-        condition, aggregates = parse_having_clause_recursive(having_clause, aggregates, groups, columns)
+        condition, aggregates = _parse_having_clause(having_clause, aggregates, groups, columns)
         return (
             NotGroupCondition(
                 operator=LogicalOperator.NOT,
@@ -318,12 +317,12 @@ def parse_having_clause_recursive(having_clause: str, aggregates: AggregatesDict
             aggregates
         )
 
-    return parse_aggregate_condition(having_clause, aggregates, groups, columns)
+    return _parse_aggregate_condition(having_clause, aggregates, groups, columns)
 
 
-def parse_aggregate_condition(condition: str, aggregates: AggregatesDict, groups: list[str], columns: dict[str, np.dtype]) ->  tuple[GroupAggregateCondition | GlobalAggregateCondition, AggregatesDict]:
+def _parse_aggregate_condition(condition: str, aggregates: AggregatesDict, groups: list[str], columns: dict[str, np.dtype]) ->  tuple[GroupAggregateCondition | GlobalAggregateCondition, AggregatesDict]:
     condition = condition.strip()
-    match = find_conditional_operator(condition)
+    match = _find_conditional_operator(condition)
     if not match:
         raise ParsingError(ParsingErrorType.HAVING_CLAUSE, f"Invalid condition: '{condition}'")
     operator = match.group(1)
@@ -334,7 +333,7 @@ def parse_aggregate_condition(condition: str, aggregates: AggregatesDict, groups
     aggregate_str = parts[0].strip()
     value = parts[1].strip()
 
-    aggregate: Global_Aggregate | GroupAggregate = parse_aggregate(aggregate_str, groups, columns, ParsingErrorType.HAVING_CLAUSE)
+    aggregate: Global_Aggregate | GroupAggregate = _parse_aggregate(aggregate_str, groups, columns, ParsingErrorType.HAVING_CLAUSE)
     
     try:
         value = float(value)
@@ -380,7 +379,7 @@ def parse_order_by_clause(order_by_clause: str, number_of_select_columns: int):
 ###########################################################################
 # Aggregate and Value Parsing
 ###########################################################################
-def parse_aggregate(aggregate: str, groups: list[str], columns: dict[str, np.dtype], error_type=ParsingErrorType.SELECT_CLAUSE or ParsingErrorType.HAVING_CLAUSE) -> GlobalAggregate | GroupAggregate:
+def _parse_aggregate(aggregate: str, groups: list[str], columns: dict[str, np.dtype], error_type=ParsingErrorType.SELECT_CLAUSE or ParsingErrorType.HAVING_CLAUSE) -> GlobalAggregate | GroupAggregate:
     AGGREGATE_FUNCTIONS = ['sum','avg','min', 'max', 'count']
     parts = aggregate.split('.')
 
@@ -418,7 +417,7 @@ def parse_aggregate(aggregate: str, groups: list[str], columns: dict[str, np.dty
     raise ParsingError(error_type, f"Invalid aggregate: '{aggregate}'\nAggregate must be in the format 'column.aggregate_function' or 'group.column.aggregate_function'")
 
 
-def parse_condition_value(column_dtype: np.dtype, operator: str, value: str, columns: dict[str, np.dtype], condition: str, error_type=ParsingErrorType.SELECT_CLAUSE or ParsingErrorType.SUCH_THAT_CLAUSE) -> tuple[float | bool | str | date, bool]:
+def _parse_condition_value(column_dtype: np.dtype, operator: str, value: str, columns: dict[str, np.dtype], condition: str, error_type=ParsingErrorType.SELECT_CLAUSE or ParsingErrorType.SUCH_THAT_CLAUSE) -> tuple[float | bool | str | date, bool]:
     date_pattern = r"^['\"]\d{4}[-/]\d{1,2}[-/]\d{1,2}['\"]$"
     value = value.strip()
     
@@ -461,21 +460,21 @@ def parse_condition_value(column_dtype: np.dtype, operator: str, value: str, col
 
 #TODO: Implement to handle parsing of EMF values
 # Should be able to handle numeric euquations (i.e col = col + 1) 
-def parse_emf_condition_value(value: str): 
+def _parse_emf_condition_value(value: str): 
     pass
 
 
 ###########################################################################
 # Clause Structure Helper Functions
 ###########################################################################
-def find_conditional_operator(condition: str) -> re.Match | None:
+def _find_conditional_operator(condition: str) -> re.Match | None:
     CONDITIONAL_OPERATORS = ['>=', '<=', '!=', '==', '>', '<', '=']
     operator_pattern = r'\s*(' + '|'.join(re.escape(op) for op in CONDITIONAL_OPERATORS) + r')\s*'
     match = re.search(operator_pattern, condition)
     return match
 
 
-def has_wrapping_parenthesis(condition: str) -> bool:
+def _has_wrapping_parenthesis(condition: str) -> bool:
     if not (condition.startswith('(') and condition.endswith(')')):
         return False
     paren_level = 0
@@ -489,7 +488,7 @@ def has_wrapping_parenthesis(condition: str) -> bool:
     return True
 
 
-def split_by_logical_operator(condition: str, operator: LogicalOperator) -> list[str]:
+def _split_by_logical_operator(condition: str, operator: LogicalOperator) -> list[str]:
     parts = []
     current = ''
     paren_level = 0

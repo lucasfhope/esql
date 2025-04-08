@@ -38,19 +38,22 @@ def _prepare_query(query: str) -> str:
 
 
 def _build_parsed_query(data: pd.DataFrame, query: str) -> ParsedQuery:
+    column_dtypes = data.dtypes.to_dict()
     keyword_clauses = get_keyword_clauses(query)
-    parsed_over_clause = parse_over_clause(over_clause=keyword_clauses["OVER"])
+    
+    parsed_over_clause = parse_over_clause(
+        over_clause=keyword_clauses["OVER"]
+    )
     
     parsed_select_clause = parse_select_clause(
         select_clause=keyword_clauses["SELECT"],
         groups=parsed_over_clause,
-        columns=data.columns
+        column_dtypes=column_dtypes
     )
     
     parsed_where_clause = parse_where_clause(
         where_clause=keyword_clauses["WHERE"],
-        groups=parsed_over_clause,
-        columns=data.columns
+        column_dtypes=column_dtypes
     )
 
     parsed_such_that_clauses = []
@@ -60,22 +63,22 @@ def _build_parsed_query(data: pd.DataFrame, query: str) -> ParsedQuery:
             parse_such_that_clause(
                 such_that_clause=condition,
                 groups=parsed_over_clause,
-                columns=data.columns
+                column_dtypes=column_dtypes
             )
         )
     
     (having_clause, aggregates) = parse_having_clause(
         having_clause=keyword_clauses["HAVING"],
         groups=parsed_over_clause,
-        columns=data.columns
+        column_dtypes=data.column_dtypes
     )
+    aggregates.update(parsed_select_clause['aggregates'])
 
     order_by_clause = parse_order_by_clause(
         order_by_clause=keyword_clauses["ORDER BY"],
         number_of_select_columns=len(parsed_select_clause['columns']) 
     )
 
-    aggregates.update(parsed_select_clause['aggregates'])
     return ParsedQuery(
         data=data,
         select=parsed_select_clause,

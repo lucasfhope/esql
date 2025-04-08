@@ -3,20 +3,15 @@ import pandas as pd
 import numpy as np
 from datetime import date
 
-from src.esql.main import _enforce_allowed_dtypes
 from src.esql.parser.util import get_keyword_clauses, parse_select_clause, parse_over_clause, parse_where_clause, parse_such_that_clause, parse_having_clause, parse_order_by_clause
 from src.esql.parser.types import ParsedSelectClause, AggregatesDict, GlobalAggregate, GroupAggregate, ParsedWhereClause, LogicalOperator, SimpleCondition, CompoundCondition, NotCondition, SimpleGroupCondition, CompoundGroupCondition, NotGroupCondition, ParsedSuchThatClause, CompoundAggregateCondition, NotAggregateCondition, GlobalAggregateCondition, GroupAggregateCondition
 from src.esql.parser.error import ParsingError, ParsingErrorType
+from tests.parser.test_parse import data
 
 @pytest.fixture
-def columns() -> dict[str, np.dtype]: 
-    data = _enforce_allowed_dtypes(
-        pd.read_csv(
-            'public/data/sales.csv'
-        )
-    )
-    columns = data.dtypes.to_dict()
-    return columns
+def column_dtypes(data: pd.DataFrame) -> dict[str, np.dtype]: 
+    column_dtypes = data.dtypes.to_dict()
+    return column_dtypes
 
 
 ###########################################################################
@@ -107,11 +102,11 @@ def test_parse_over_clause_raises_error_for_invalid_characters():
 ###########################################################################
 # PARSE_SELECT_CLAUSE TESTS
 ###########################################################################
-def test_parse_select_clause_returns_expected_structure(columns: dict[str, np.dtype]):
+def test_parse_select_clause_returns_expected_structure(column_dtypes: dict[str, np.dtype]):
     parsedSelectClause = parse_select_clause(
         select_clause="cust, prod, date, quant.sum, 1.quant.max, 2.quant.min, 3.quant.avg, 3.month.count",
         groups=['1','2','3'],
-        columns=columns
+        column_dtypes=column_dtypes
     )
     expected = ParsedSelectClause(
         columns=['cust', 'prod', 'date'],
@@ -129,48 +124,48 @@ def test_parse_select_clause_returns_expected_structure(columns: dict[str, np.dt
     )
     assert parsedSelectClause == expected
 
-def test_parse_select_clause_raises_error_for_invalid_aggregate_group(columns: dict[str, np.dtype]):
+def test_parse_select_clause_raises_error_for_invalid_aggregate_group(column_dtypes: dict[str, np.dtype]):
     with pytest.raises(ParsingError) as parsingError:
         parse_select_clause(
             select_clause="cust, prod, date, quant.sum, 1.quant.max, 2.quant.min, 3.quant.avg",
             groups=['1','2'],
-            columns=columns
+            column_dtypes=column_dtypes
         )
     assert parsingError.value.error_type == ParsingErrorType.SELECT_CLAUSE and "Invalid aggregate group: '3.quant.avg'" in parsingError.value.message
 
-def test_parse_select_clause_raises_error_for_invalid_aggregate_column(columns: dict[str, np.dtype]):
+def test_parse_select_clause_raises_error_for_invalid_aggregate_column(column_dtypes: dict[str, np.dtype]):
     with pytest.raises(ParsingError) as parsingError:
         parse_select_clause(
             select_clause="cust, prod, date, quant.sum, 1.quant.max, 2.q.min, 3.quant.avg",
             groups=['1','2','3'],
-            columns=columns
+            column_dtypes=column_dtypes
         )
     assert parsingError.value.error_type == ParsingErrorType.SELECT_CLAUSE and "Invalid aggregate column: '2.q.min'" in parsingError.value.message
 
-def test_parse_select_clause_raises_error_for_aggregate_with_non_numeric_column(columns: dict[str, np.dtype]):
+def test_parse_select_clause_raises_error_for_aggregate_with_non_numeric_column(column_dtypes: dict[str, np.dtype]):
     with pytest.raises(ParsingError) as parsingError:
         parse_select_clause(
             select_clause="cust, prod, date, quant.sum, 1.quant.max, 2.credit.min, 3.quant.avg",
             groups=['1','2','3'],
-            columns=columns
+            column_dtypes=column_dtypes
         )
     assert parsingError.value.error_type == ParsingErrorType.SELECT_CLAUSE and "Invalid aggregate. Column is not a numeric type: '2.credit.min'" in parsingError.value.message
 
-def test_parse_select_clause_raises_error_for_invalid_aggregate_function(columns: dict[str, np.dtype]):
+def test_parse_select_clause_raises_error_for_invalid_aggregate_function(column_dtypes: dict[str, np.dtype]):
     with pytest.raises(ParsingError) as parsingError:
         parse_select_clause(
             select_clause="cust, prod, date, quant.mean, 1.quant.max, 3.quant.avg",
             groups=['1','2','3'],
-            columns=columns
+            column_dtypes=column_dtypes
         )
     assert parsingError.value.error_type == ParsingErrorType.SELECT_CLAUSE and "Invalid aggregate function: 'quant.mean'" in parsingError.value.message
 
-def test_parse_select_clause_raises_error_for_invalid_column(columns: dict[str, np.dtype]):
+def test_parse_select_clause_raises_error_for_invalid_column(column_dtypes: dict[str, np.dtype]):
     with pytest.raises(ParsingError) as parsingError:
         parse_select_clause(
             select_clause="cust_, prod, date, 1.quant.max, 3.quant.avg",
             groups=['1','2','3'],
-            columns=columns
+            column_dtypes=column_dtypes
         )
     assert parsingError.value.error_type == ParsingErrorType.SELECT_CLAUSE and "Invalid column: 'cust_'" in parsingError.value.message
 
@@ -178,10 +173,10 @@ def test_parse_select_clause_raises_error_for_invalid_column(columns: dict[str, 
 ###########################################################################
 # PARSE_WHERE_CLAUSE TESTS
 ###########################################################################
-def test_parse_where_clause_returns_expected_structure_with_logical_operators(columns: dict[str, np.dtype]):
+def test_parse_where_clause_returns_expected_structure_with_logical_operators(column_dtypes: dict[str, np.dtype]):
     parsedWhereClause = parse_where_clause(
         where_clause="not (cust = 'Dan') and (month = 7 or month = 8 and year = 2020) and credit=True",
-        columns=columns
+        column_dtypes=column_dtypes
     )
     expected: ParsedWhereClause = CompoundCondition(
         operator=LogicalOperator.AND,
@@ -233,10 +228,10 @@ def test_parse_where_clause_returns_expected_structure_with_logical_operators(co
     )
     assert parsedWhereClause == expected
 
-def test_parse_where_clause_can_handle_boolean_column_condition(columns: dict[str, np.dtype]):
+def test_parse_where_clause_can_handle_boolean_column_condition(column_dtypes: dict[str, np.dtype]):
     parsedWhereClause = parse_where_clause(
         where_clause="credit",
-        columns=columns
+        column_dtypes=column_dtypes
     )
     expected: ParsedWhereClause = SimpleCondition(
         column='credit',
@@ -246,7 +241,7 @@ def test_parse_where_clause_can_handle_boolean_column_condition(columns: dict[st
     )
     assert parsedWhereClause == expected
 
-def test_parse_where_clause_can_handle_valid_simple_conditions(columns: dict[str, np.dtype]):
+def test_parse_where_clause_can_handle_valid_simple_conditions(column_dtypes: dict[str, np.dtype]):
         conditions = [
             ("cust", "==", "'Dan'"),
             ("quant", ">", 10),
@@ -259,7 +254,7 @@ def test_parse_where_clause_can_handle_valid_simple_conditions(columns: dict[str
         for column, operator, value in conditions:    
             parsedWhereClause = parse_where_clause(
                 where_clause=f"{column} {operator} {str(value)}",
-                columns=columns
+                column_dtypes=column_dtypes
             ) 
             if isinstance(value, str):
                 value = value[1:-1]
@@ -271,7 +266,7 @@ def test_parse_where_clause_can_handle_valid_simple_conditions(columns: dict[str
             )
             assert parsedWhereClause == expected
 
-def test_parse_where_clause_can_handle_valid_dates(columns: dict[str, np.dtype]):
+def test_parse_where_clause_can_handle_valid_dates(column_dtypes: dict[str, np.dtype]):
        date_clauses = [
            ('>=', "'2020-07-01'", date(2020, 7, 1)),
            ('<=', '"2021/12/07"', date(2021, 12, 7)),
@@ -284,7 +279,7 @@ def test_parse_where_clause_can_handle_valid_dates(columns: dict[str, np.dtype])
        for operator, value, expected_date in date_clauses:  
             parsedWhereClause = parse_where_clause(
                 where_clause=f'date {operator} {value}',
-                columns=columns
+                column_dtypes=column_dtypes
             )
             expected: ParsedWhereClause = SimpleCondition(
                 column='date',
@@ -294,16 +289,16 @@ def test_parse_where_clause_can_handle_valid_dates(columns: dict[str, np.dtype])
             )
             assert parsedWhereClause == expected
 
-def test_parse_where_clause_raises_error_when_date_is_not_wrapped_in_quotes(columns: dict[str, np.dtype]):
+def test_parse_where_clause_raises_error_when_date_is_not_wrapped_in_quotes(column_dtypes: dict[str, np.dtype]):
     with pytest.raises(ParsingError) as parsingError:
         parse_where_clause(
             where_clause="date != 2019-10-8",
-            columns=columns
+            column_dtypes=column_dtypes
         )
     assert parsingError.value.error_type == ParsingErrorType.WHERE_CLAUSE
 
 
-def test_parse_where_clause_raises_error_for_invalid_dates(columns: dict[str, np.dtype]):
+def test_parse_where_clause_raises_error_for_invalid_dates(column_dtypes: dict[str, np.dtype]):
     dates = [
         "2023-13-01",
         "2023-02-29",  
@@ -315,19 +310,19 @@ def test_parse_where_clause_raises_error_for_invalid_dates(columns: dict[str, np
         with pytest.raises(ParsingError) as parsingError:
             parse_where_clause(
                 where_clause=f"date = '{date}'",
-                columns=columns
+                column_dtypes=column_dtypes
             )  
         assert parsingError.value.error_type == ParsingErrorType.WHERE_CLAUSE
 
-def test_parse_where_clause_raises_error_for_missing_conditional_operators(columns: dict[str, np.dtype]):
+def test_parse_where_clause_raises_error_for_missing_conditional_operators(column_dtypes: dict[str, np.dtype]):
     with pytest.raises(ParsingError) as parsingError:
         parse_where_clause(
             where_clause="cust 'Dan'",
-            columns=columns
+            column_dtypes=column_dtypes
         )
     assert parsingError.value.error_type == ParsingErrorType.WHERE_CLAUSE and "No conditional operator" in parsingError.value.message 
 
-def test_parse_where_clause_raises_error_for_invalid_values(columns: dict[str, np.dtype]):
+def test_parse_where_clause_raises_error_for_invalid_values(column_dtypes: dict[str, np.dtype]):
     invalid_values = [
         "cust = 123",
         "cust = 12.3",
@@ -342,12 +337,12 @@ def test_parse_where_clause_raises_error_for_invalid_values(columns: dict[str, n
         with pytest.raises(ParsingError) as parsingError:
             parse_where_clause(
                 where_clause=invalid_value,
-                columns=columns
+                column_dtypes=column_dtypes
             )
         assert parsingError.value.error_type == ParsingErrorType.WHERE_CLAUSE and any(error in parsingError.value.message for error in ["Invalid value", "Invalid column reference"])
 
 
-def test_parse_where_clause_raises_error_for_double_logical_operators(columns: dict[str, np.dtype]):
+def test_parse_where_clause_raises_error_for_double_logical_operators(column_dtypes: dict[str, np.dtype]):
     invalid_clauses = [
         "cust = 'Dan' or or month = 7",
         "cust = 'Dan' and and month = 7"
@@ -356,18 +351,18 @@ def test_parse_where_clause_raises_error_for_double_logical_operators(columns: d
         with pytest.raises(ParsingError) as parsingError:
             parsed_where_clause = parse_where_clause(
                 where_clause=invalid_clause,
-                columns=columns
+                column_dtypes=column_dtypes
             )
         assert parsingError.value.error_type == ParsingErrorType.WHERE_CLAUSE
 
 ###########################################################################
 # PARSE_SUCH_THAT_CLAUSE TESTS
 ###########################################################################
-def test_parse_such_that_clause_returns_expected_structure_with_logical_operators(columns: dict[str, np.dtype]):
+def test_parse_such_that_clause_returns_expected_structure_with_logical_operators(column_dtypes: dict[str, np.dtype]):
     parsedSuchThatClause = parse_such_that_clause(
         such_that_clause="1.cust = 'Sam' or not (1.year = 2020 and not 1.credit)",
         groups=['1','2','3'],
-        columns=columns
+        column_dtypes=column_dtypes
     )
     expected: ParsedSuchThatClause = CompoundGroupCondition(
         operator=LogicalOperator.OR,
@@ -408,21 +403,21 @@ def test_parse_such_that_clause_returns_expected_structure_with_logical_operator
     )
     assert parsedSuchThatClause == expected
 
-def test_parse_such_that_clause_raises_error_for_multiple_groups_in_a_clause(columns: dict[str, np.dtype]):
+def test_parse_such_that_clause_raises_error_for_multiple_groups_in_a_clause(column_dtypes: dict[str, np.dtype]):
     with pytest.raises(ParsingError) as parsingError:
         parse_such_that_clause(
             such_that_clause="1.year = 2020 and 2.credit",
             groups=['1','2'],
-            columns=columns
+            column_dtypes=column_dtypes
         )
     assert parsingError.value.error_type == ParsingErrorType.SUCH_THAT_CLAUSE and "Multiple groups" in parsingError.value.message 
 
-def test_parse_such_that_clause_raises_error_for_invalid_group(columns: dict[str, np.dtype]):
+def test_parse_such_that_clause_raises_error_for_invalid_group(column_dtypes: dict[str, np.dtype]):
     with pytest.raises(ParsingError) as parsingError:
         parse_such_that_clause(
             such_that_clause="2.year = 2020 and 2.credit",
             groups=['1'],
-            columns=columns
+            column_dtypes=column_dtypes
         )
     assert parsingError.value.error_type == ParsingErrorType.SUCH_THAT_CLAUSE and "No valid group" in parsingError.value.message 
 
@@ -430,11 +425,11 @@ def test_parse_such_that_clause_raises_error_for_invalid_group(columns: dict[str
 ###########################################################################
 # PARSE_HAVING_CLAUSE TESTS
 ###########################################################################
-def test_parse_having_clause_returns_expected_structure_with_logical_operators(columns: dict[str, np.dtype]):
+def test_parse_having_clause_returns_expected_structure_with_logical_operators(column_dtypes: dict[str, np.dtype]):
     parsedHavingClause, _ = parse_having_clause(
         having_clause="1.quant.avg > 500 and 1.month.count < 50 or not quant.max >= 765 or (3.quant.min == 30 or quant.sum != 300)",
         groups=['1','3'],
-        columns=columns
+        column_dtypes=column_dtypes
     )
     expected: ParsedHavingClause = CompoundAggregateCondition(
         operator=LogicalOperator.OR,
@@ -499,11 +494,11 @@ def test_parse_having_clause_returns_expected_structure_with_logical_operators(c
     )
     assert parsedHavingClause == expected
 
-def test_parse_having_clause_returns_expected_aggregates_dict(columns: dict[str, np.dtype]):
+def test_parse_having_clause_returns_expected_aggregates_dict(column_dtypes: dict[str, np.dtype]):
     _ , aggregates = parse_having_clause(
         having_clause="1.quant.avg > 500 and 1.quant.avg < 50 or not quant.max >= 765 or (3.quant.min == 30 or quant.sum != 300)",
         groups=['1','3'],
-        columns=columns
+        column_dtypes=column_dtypes
     )
     expected = AggregatesDict(
         group_specific=[
@@ -531,61 +526,61 @@ def test_parse_having_clause_returns_expected_aggregates_dict(columns: dict[str,
     )
     assert aggregates == expected
 
-def test_parse_having_clause_raises_error_for_invalid_group_in_aggregate(columns: dict[str, np.dtype]):
+def test_parse_having_clause_raises_error_for_invalid_group_in_aggregate(column_dtypes: dict[str, np.dtype]):
     with pytest.raises(ParsingError) as parsingError:
         parse_having_clause(
             having_clause="1.quant.avg > 500",
             groups=['2','3'],
-            columns=columns
+            column_dtypes=column_dtypes
         )
     assert parsingError.value.error_type == ParsingErrorType.HAVING_CLAUSE and "Invalid aggregate group" in parsingError.value.message
 
-def test_parse_having_clause_raises_error_for_invalid_column_in_aggregate(columns: dict[str, np.dtype]):
+def test_parse_having_clause_raises_error_for_invalid_column_in_aggregate(column_dtypes: dict[str, np.dtype]):
     with pytest.raises(ParsingError) as parsingError:
         parse_having_clause(
             having_clause="2.cal.avg > 500",
             groups=['2','3'],
-            columns=columns
+            column_dtypes=column_dtypes
         )
     assert parsingError.value.error_type == ParsingErrorType.HAVING_CLAUSE and "Invalid aggregate column" in parsingError.value.message
 
-def test_parse_having_clause_raises_error_for_non_numeric_column_in_aggregate(columns: dict[str, np.dtype]):
+def test_parse_having_clause_raises_error_for_non_numeric_column_in_aggregate(column_dtypes: dict[str, np.dtype]):
     with pytest.raises(ParsingError) as parsingError:
         parse_having_clause(
             having_clause="2.date.avg > 500",
             groups=['2','3'],
-            columns=columns
+            column_dtypes=column_dtypes
         )
     assert parsingError.value.error_type == ParsingErrorType.HAVING_CLAUSE and "Column is not a numeric type" in parsingError.value.message
 
-def test_parse_having_clause_raises_error_for_invalid_function_in_aggregate(columns: dict[str, np.dtype]):
+def test_parse_having_clause_raises_error_for_invalid_function_in_aggregate(column_dtypes: dict[str, np.dtype]):
     with pytest.raises(ParsingError) as parsingError:
         parse_having_clause(
             having_clause="2.quant.mean > 500",
             groups=['2','3'],
-            columns=columns
+            column_dtypes=column_dtypes
         )
     assert parsingError.value.error_type == ParsingErrorType.HAVING_CLAUSE and "Invalid aggregate function" in parsingError.value.message
 
-def test_parse_having_clause_raises_error_for_no_operator_in_condition(columns: dict[str, np.dtype]):
+def test_parse_having_clause_raises_error_for_no_operator_in_condition(column_dtypes: dict[str, np.dtype]):
     with pytest.raises(ParsingError) as parsingError:
         parse_having_clause(
             having_clause="2.quant.mean 500",
             groups=['2','3'],
-            columns=columns
+            column_dtypes=column_dtypes
         )
     assert parsingError.value.error_type == ParsingErrorType.HAVING_CLAUSE and "Invalid condition" in parsingError.value.message
 
-def test_parse_having_clause_raises_error_for_invalid_operator_in_condition(columns: dict[str, np.dtype]):
+def test_parse_having_clause_raises_error_for_invalid_operator_in_condition(column_dtypes: dict[str, np.dtype]):
     with pytest.raises(ParsingError) as parsingError:
         parse_having_clause(
             having_clause="2.quant.mean ==== 500",
             groups=['2','3'],
-            columns=columns
+            column_dtypes=column_dtypes
         )
     assert parsingError.value.error_type == ParsingErrorType.HAVING_CLAUSE and "Invalid condition" in parsingError.value.message
 
-def test_parse_having_clause_raises_error_for_non_numeric_comparison_value(columns: dict[str, np.dtype]):
+def test_parse_having_clause_raises_error_for_non_numeric_comparison_value(column_dtypes: dict[str, np.dtype]):
     values = [
         "'apple'",
         "'500'",
@@ -598,7 +593,7 @@ def test_parse_having_clause_raises_error_for_non_numeric_comparison_value(colum
             parse_having_clause(
                 having_clause=f"2.quant.avg != {value}",
                 groups=['2','3'],
-                columns=columns
+                column_dtypes=column_dtypes
             )
         assert parsingError.value.error_type == ParsingErrorType.HAVING_CLAUSE and "Invalid value" in parsingError.value.message
 

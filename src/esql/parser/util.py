@@ -262,7 +262,7 @@ def _parse_simple_group_condition(condition: str, group: str, columns: dict[str,
 # HAVING Clause Parsing
 ###########################################################################
 def parse_having_clause(having_clause: str, groups: list[str], columns: dict[str, np.dtype]) -> tuple[ParsedHavingClause, AggregatesDict]:
-    return _parse_having_clause_recursive(
+    return _parse_having_clause(
         having_clause=having_clause,
         aggregates=AggregatesDict(
             global_scope=[],

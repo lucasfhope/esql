@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 from datetime import date
 
-from src.esql.parser.util import get_keyword_clauses, parse_select_clause, parse_over_clause, parse_where_clause, parse_such_that_clause, parse_having_clause, parse_order_by_clause
+from src.esql.parser.util import get_keyword_clauses, parse_select_clause, parse_over_clause, parse_where_clause, parse_such_that_clause, parse_having_clause, parse_order_by_clause, _split_by_logical_operator, _split_condition, _has_wrapping_parenthesis
 from src.esql.parser.types import ParsedSelectClause, AggregatesDict, GlobalAggregate, GroupAggregate, ParsedWhereClause, LogicalOperator, SimpleCondition, CompoundCondition, NotCondition, SimpleGroupCondition, CompoundGroupCondition, NotGroupCondition, ParsedSuchThatClause, CompoundAggregateCondition, NotAggregateCondition, GlobalAggregateCondition, GroupAggregateCondition
 from src.esql.parser.error import ParsingError, ParsingErrorType
 from tests.parser.test_parse import data
@@ -565,20 +565,20 @@ def test_parse_having_clause_raises_error_for_invalid_function_in_aggregate(colu
 def test_parse_having_clause_raises_error_for_no_operator_in_condition(column_dtypes: dict[str, np.dtype]):
     with pytest.raises(ParsingError) as parsingError:
         parse_having_clause(
-            having_clause="2.quant.mean 500",
+            having_clause="2.quant.avg 500",
             groups=['2','3'],
             column_dtypes=column_dtypes
         )
-    assert parsingError.value.error_type == ParsingErrorType.HAVING_CLAUSE and "Invalid condition" in parsingError.value.message
+    assert parsingError.value.error_type == ParsingErrorType.HAVING_CLAUSE and "No conditional operator" in parsingError.value.message
 
 def test_parse_having_clause_raises_error_for_invalid_operator_in_condition(column_dtypes: dict[str, np.dtype]):
     with pytest.raises(ParsingError) as parsingError:
         parse_having_clause(
-            having_clause="2.quant.mean ==== 500",
+            having_clause="2.quant.avg ==== 500",
             groups=['2','3'],
             column_dtypes=column_dtypes
         )
-    assert parsingError.value.error_type == ParsingErrorType.HAVING_CLAUSE and "Invalid condition" in parsingError.value.message
+    assert parsingError.value.error_type == ParsingErrorType.HAVING_CLAUSE and "Invalid value" in parsingError.value.message
 
 def test_parse_having_clause_raises_error_for_non_numeric_comparison_value(column_dtypes: dict[str, np.dtype]):
     values = [
@@ -642,6 +642,47 @@ def test_order_by_clause_raises_error_for_out_of_range_inputs():
                 number_of_select_columns=3
             )
         assert parsingError.value.error_type == ParsingErrorType.ORDER_BY_CLAUSE and "Value out of range" in parsingError.value.message
+
+    
+###########################################################################
+# CLAUSE STRUCTURE HELPER FUNCTIONS TESTS
+###########################################################################
+def test_split_by_operator_does_not_split_on_logical_operators_within_quotes():
+    result = _split_by_logical_operator(
+        condition="prod = 'dan and jess'",
+        operator=LogicalOperator.AND
+    )
+    expected = ["prod = 'dan and jess'"]
+    assert result == expected
+
+def test_split_by_conditional_operator_does_not_split_on_conditional_operators_within_quotes():
+    result = _split_condition(condition="'dan = jess>='")
+    assert result == None
+
+def test_split_by_conditional_operator_does_not_split_on_conditional_operators_within_quotes_found_outside_of_quotes():
+    result = _split_condition(condition="prod = 'dan = jess'")
+    expected = ("prod", "=", "'dan = jess'") 
+    assert result == expected
+
+def test_has_wrapping_parenthesis_resturns_correct_result():
+    tests = {
+        "prod = 'dan'" : False,
+        " (prod = 'dan') " : True,
+        "(prod = 'dan' and month = 7)" : True,
+        "(prod = 'dan') and (month = 7)" : False,
+        "(prod = 'Dan)' and month = 7)" : True,
+        "(prod = 'Dan') and month = 7)" : False,
+    }
+    for string, expected in tests.items():
+        result = _has_wrapping_parenthesis(string)
+        assert result == expected
+
+
+ 
+
+
+
+
 
 
 

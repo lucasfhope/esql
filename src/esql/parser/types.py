@@ -94,9 +94,9 @@ ParsedHavingClause = (
 class ParsedQuery(TypedDict):
     data: pd.DataFrame
     select: ParsedSelectClause
-    over: list[str]
+    over: List[str]
     where: ParsedWhereClause
-    such_that: list[ParsedSuchThatClause]
+    such_that: List[ParsedSuchThatClause]
     having: ParsedHavingClause
     order_by: int
     aggregates: AggregatesDict

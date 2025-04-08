@@ -72,7 +72,8 @@ def _build_parsed_query(data: pd.DataFrame, query: str) -> ParsedQuery:
         groups=parsed_over_clause,
         column_dtypes=column_dtypes
     )
-    aggregates.update(parsed_select_clause['aggregates'])
+    aggregates['global_scope'].extend(parsed_select_clause['aggregates']['global_scope'])
+    aggregates['group_specific'].extend(parsed_select_clause['aggregates']['group_specific'])
 
     order_by_clause = parse_order_by_clause(
         order_by_clause=keyword_clauses["ORDER BY"],

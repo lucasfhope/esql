@@ -1,15 +1,9 @@
-from typing import TypedDict, Union, Literal, List, Dict, Tuple
+import pandas as pd
 from enum import Enum
 from datetime import date
-import pandas as pd
+from typing import TypedDict, Union, Literal, List, Dict, Tuple
 
 
-'''
-PARSING ERROR
-'''
-
-#    aggregates = {'global': [], 'group_specific': []}
-    
 class GlobalAggregate(TypedDict):
     column: str
     function: str
@@ -26,21 +20,11 @@ class AggregatesDict(TypedDict):
     group_specific: List[GroupAggregate]
 
 
-class ParsedSelectClause(TypedDict):
-    columns: List[str]
-    aggregates: AggregatesDict
-
-
-
-
-###################
-# Conditions
-###################
-
 class LogicalOperator(Enum):
     AND = "and"
     OR = "or"
     NOT = "not"
+
 
 class SimpleCondition(TypedDict):
     column: str
@@ -55,12 +39,6 @@ class CompoundCondition(TypedDict):
 class NotCondition(TypedDict):
     operator: Literal[LogicalOperator.NOT]
     condition: 'ParsedWhereClause'
-    
-ParsedWhereClause = (
-    SimpleCondition |
-    CompoundCondition |
-    NotCondition
-)
 
 
 class SimpleGroupCondition(SimpleCondition):
@@ -72,13 +50,6 @@ class CompoundGroupCondition(CompoundCondition):
 class NotGroupCondition(NotCondition):
     condition: 'ParsedSuchThatClause'
 
-ParsedSuchThatClause = (
-    SimpleGroupCondition |
-    CompoundGroupCondition |
-    NotGroupCondition
-)
-
-
 
 class GlobalAggregateCondition(TypedDict):
     aggregate: GlobalAggregate
@@ -88,33 +59,37 @@ class GlobalAggregateCondition(TypedDict):
 class GroupAggregateCondition(GlobalAggregateCondition):
     aggregate: GroupAggregate
 
-# Compound condition for HAVING clause using AND/OR.
 class CompoundAggregateCondition(TypedDict):
     operator: List['ConditionType']
-    conditions: List["ParsedHavingClause"]
+    conditions: List['ParsedHavingClause']
 
-# NOT condition that wraps a single condition.
 class NotAggregateCondition(TypedDict):
     operator: Literal[LogicalOperator.NOT]
-    condition: "ParsedHavingClause"
+    condition: 'ParsedHavingClause'
 
-# Union of all possible HAVING clause condition types.
+
+class ParsedSelectClause(TypedDict):
+    columns: List[str]
+    aggregates: AggregatesDict
+
+ParsedWhereClause = (
+    SimpleCondition |
+    CompoundCondition |
+    NotCondition
+)
+
+ParsedSuchThatClause = (
+    SimpleGroupCondition |
+    CompoundGroupCondition |
+    NotGroupCondition
+)
+
 ParsedHavingClause = (
     GlobalAggregateCondition |
     GroupAggregateCondition |
     CompoundAggregateCondition |
     NotAggregateCondition
 )
-
-
-
-
-
-
-
-
-
-
 
 class ParsedQuery(TypedDict):
     data: pd.DataFrame
@@ -125,6 +100,8 @@ class ParsedQuery(TypedDict):
     having: ParsedHavingClause
     order_by: int
     aggregates: AggregatesDict
+
+
 
 
 

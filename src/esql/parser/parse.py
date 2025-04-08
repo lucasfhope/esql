@@ -58,7 +58,7 @@ def _build_parsed_query(data: pd.DataFrame, query: str) -> ParsedQuery:
 
     parsed_such_that_clauses = []
     such_that_conditions = keyword_clauses["SUCH THAT"].split(',')
-    for condition in conditions:
+    for condition in such_that_conditions:
         parsed_such_that_clauses.append(
             parse_such_that_clause(
                 such_that_clause=condition,
@@ -70,7 +70,7 @@ def _build_parsed_query(data: pd.DataFrame, query: str) -> ParsedQuery:
     (having_clause, aggregates) = parse_having_clause(
         having_clause=keyword_clauses["HAVING"],
         groups=parsed_over_clause,
-        column_dtypes=data.column_dtypes
+        column_dtypes=column_dtypes
     )
     aggregates.update(parsed_select_clause['aggregates'])
 

@@ -2,7 +2,7 @@ import re
 import pandas as pd
 
 from src.esql.parser.types import ParsedQuery
-from src.esql.parser.util import get_keyword_clauses, parse_over_clause, parse_select_clause, parse_where_clause, parse_such_that_clause, parse_having_clause, parse_order_by_clause
+from src.esql.parser.util import get_keyword_clauses, parse_over_clause, parse_select_clause, parse_where_clause, parse_such_that_clauses, parse_having_clause, parse_order_by_clause
 
 
 def get_parsed_query(data: pd.DataFrame, query: str) -> ParsedQuery:
@@ -56,22 +56,18 @@ def _build_parsed_query(data: pd.DataFrame, query: str) -> ParsedQuery:
         column_dtypes=column_dtypes
     )
 
-    parsed_such_that_clauses = []
-    such_that_conditions = keyword_clauses["SUCH THAT"].split(',')
-    for condition in such_that_conditions:
-        parsed_such_that_clauses.append(
-            parse_such_that_clause(
-                such_that_clause=condition,
-                groups=parsed_over_clause,
-                column_dtypes=column_dtypes
-            )
-        )
+    parsed_such_that_clauses = parse_such_that_clauses(
+        such_that_clauses=keyword_clauses["SUCH THAT"],
+        groups=parsed_over_clause,
+        column_dtypes=column_dtypes
+    )
     
-    (having_clause, aggregates) = parse_having_clause(
+    (parsed_having_clause, aggregates) = parse_having_clause(
         having_clause=keyword_clauses["HAVING"],
         groups=parsed_over_clause,
         column_dtypes=column_dtypes
     )
+
     aggregates['global_scope'].extend(parsed_select_clause['aggregates']['global_scope'])
     aggregates['group_specific'].extend(parsed_select_clause['aggregates']['group_specific'])
 
@@ -86,7 +82,7 @@ def _build_parsed_query(data: pd.DataFrame, query: str) -> ParsedQuery:
         over=parsed_over_clause,
         where=parsed_where_clause,
         such_that=parsed_such_that_clauses,
-        having=having_clause,
+        having=parsed_having_clause,
         order_by=order_by_clause,
         aggregates=aggregates
     )

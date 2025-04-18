@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 from datetime import date
 
-from src.esql.parser.util import get_keyword_clauses, parse_select_clause, parse_over_clause, parse_where_clause, parse_such_that_clause, parse_having_clause, parse_order_by_clause, _split_by_logical_operator, _split_condition, _has_wrapping_parenthesis
+from src.esql.parser.util import get_keyword_clauses, parse_select_clause, parse_over_clause, parse_where_clause, _parse_such_that_clause, parse_such_that_clauses, parse_having_clause, parse_order_by_clause, _split_by_logical_operator, _split_condition, _has_wrapping_parenthesis
 from src.esql.parser.types import ParsedSelectClause, AggregatesDict, GlobalAggregate, GroupAggregate, ParsedWhereClause, LogicalOperator, SimpleCondition, CompoundCondition, NotCondition, SimpleGroupCondition, CompoundGroupCondition, NotGroupCondition, ParsedSuchThatClause, CompoundAggregateCondition, NotAggregateCondition, GlobalAggregateCondition, GroupAggregateCondition
 from src.esql.parser.error import ParsingError, ParsingErrorType
 from tests.parser.test_parse import data
@@ -38,10 +38,10 @@ def test_get_keyword_clauses_splits_properly_with_missing_keywords():
     expected = {
         "SELECT": "cust, prod, date",
         "OVER": "bad, good, better, best",
-        "WHERE": "",
+        "WHERE": None,
         "SUCH THAT": "bad.month = 7 and good.month = 8 and better.month = 9 and best.month = 10",
         "HAVING": "good.quant.sum > 100 and bad.quant.sum < 100",
-        "ORDER BY": ""
+        "ORDER BY": None
     }
     assert keyword_clauses == expected
 
@@ -65,6 +65,27 @@ def test_get_keyword_clauses_raises_clause_order_error():
             query="SELECT cust WHERE quant > 10 OVER bad, good  SUCH THAT  HAVING good.quant.sum > 100 and bad.quant.sum < 100 and better order by 2".lower()
         )
     assert parsingError.value.error_type == ParsingErrorType.CLAUSE_ORDER and "WHERE" in parsingError.value.message
+
+def test_get_keyword_clauses_returns_none_for_missing_keywords(): 
+    keyword_clauses = get_keyword_clauses(
+        query="SELECT cust, prod, date".lower()
+    )
+    expected = {
+        "SELECT": "cust, prod, date",
+        "OVER": None,
+        "WHERE": None,
+        "SUCH THAT": None,
+        "HAVING": None,
+        "ORDER BY": None
+    }
+    assert keyword_clauses == expected
+
+def test_get_keyword_clauses_raises_error_for_missing_arguments_after_select():
+    with pytest.raises(ParsingError) as parsingError:
+        get_keyword_clauses(
+            query="SELECT OVER bad, good  SUCH THAT  HAVING good.quant.sum > 100 and bad.quant.sum < 100 and better order by 2".lower()
+        )
+    assert parsingError.value.error_type == ParsingErrorType.MISSING_CLAUSE and "No SELECT" in parsingError.value.message
 
 
 ###########################################################################
@@ -168,6 +189,16 @@ def test_parse_select_clause_raises_error_for_invalid_column(column_dtypes: dict
             column_dtypes=column_dtypes
         )
     assert parsingError.value.error_type == ParsingErrorType.SELECT_CLAUSE and "Invalid column: 'cust_'" in parsingError.value.message
+
+def test_parse_select_clause_raises_error_when_there_are_no_column_grouping_attributes(column_dtypes: dict[str, np.dtype]):
+    with pytest.raises(ParsingError) as parsingError:
+        parse_select_clause(
+            select_clause="1.quant.max, 3.quant.avg, date.count",
+            groups=['1','2','3'],
+            column_dtypes=column_dtypes
+        )
+    assert parsingError.value.error_type == ParsingErrorType.SELECT_CLAUSE
+
 
 
 ###########################################################################
@@ -359,7 +390,7 @@ def test_parse_where_clause_raises_error_for_double_logical_operators(column_dty
 # PARSE_SUCH_THAT_CLAUSE TESTS
 ###########################################################################
 def test_parse_such_that_clause_returns_expected_structure_with_logical_operators(column_dtypes: dict[str, np.dtype]):
-    parsedSuchThatClause = parse_such_that_clause(
+    parsedSuchThatClause = _parse_such_that_clause(
         such_that_clause="1.cust = 'Sam' or not (1.year = 2020 and not 1.credit)",
         groups=['1','2','3'],
         column_dtypes=column_dtypes
@@ -405,7 +436,7 @@ def test_parse_such_that_clause_returns_expected_structure_with_logical_operator
 
 def test_parse_such_that_clause_raises_error_for_multiple_groups_in_a_clause(column_dtypes: dict[str, np.dtype]):
     with pytest.raises(ParsingError) as parsingError:
-        parse_such_that_clause(
+        _parse_such_that_clause(
             such_that_clause="1.year = 2020 and 2.credit",
             groups=['1','2'],
             column_dtypes=column_dtypes
@@ -414,12 +445,55 @@ def test_parse_such_that_clause_raises_error_for_multiple_groups_in_a_clause(col
 
 def test_parse_such_that_clause_raises_error_for_invalid_group(column_dtypes: dict[str, np.dtype]):
     with pytest.raises(ParsingError) as parsingError:
-        parse_such_that_clause(
+        _parse_such_that_clause(
             such_that_clause="2.year = 2020 and 2.credit",
             groups=['1'],
             column_dtypes=column_dtypes
         )
     assert parsingError.value.error_type == ParsingErrorType.SUCH_THAT_CLAUSE and "No valid group" in parsingError.value.message 
+
+def test_parse_such_that_clauses_returns_expected_list(column_dtypes: dict[str, np.dtype]):
+    parsedSuchThatClauseList = parse_such_that_clauses(
+        such_that_clauses="1.cust = 'Sam', 2.quant > 6 or 2.quant <= 500, 3.credit == true",
+        groups=['1','2','3'],
+        column_dtypes=column_dtypes
+    )
+    expected: list[ParsedSuchThatClause] = [
+        SimpleCondition(
+            group='1',
+            column='cust',
+            operator='=',
+            value='Sam',
+            is_emf=False
+        ),
+        CompoundGroupCondition(
+            operator=LogicalOperator.OR,
+            conditions=[
+                SimpleCondition(
+                    group='2',
+                    column='quant',
+                    operator='>',
+                    value=6,
+                    is_emf=False
+                ),
+                SimpleCondition(
+                    group='2',
+                    column='quant',
+                    operator='<=',
+                    value=500,
+                    is_emf=False
+                )
+            ]
+        ),
+        SimpleCondition(
+            group='3',
+            column='credit',
+            operator='==',
+            value=True,
+            is_emf=False
+        )
+    ]
+    assert parsedSuchThatClauseList == expected
 
 
 ###########################################################################

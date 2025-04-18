@@ -10,14 +10,14 @@ from src.esql.parser.types import ParsedSelectClause, GlobalAggregate, GroupAggr
 ###########################################################################
 # Keyword & Clause Extraction
 ###########################################################################
-def get_keyword_clauses(query: str) -> dict[str, str]:
+def get_keyword_clauses(query: str) -> dict[str, str | None]:
     keyword_clauses = {
-        "SELECT": "",
-        "OVER": "",
-        "WHERE": "",
-        "SUCH THAT": "",
-        "HAVING": "",
-        "ORDER BY": ""
+        "SELECT": None,
+        "OVER": None,
+        "WHERE": None,
+        "SUCH THAT": None,
+        "HAVING": None,
+        "ORDER BY": None
     }
 
     # Find the location of each keyword in the query.
@@ -59,10 +59,12 @@ def get_keyword_clauses(query: str) -> dict[str, str]:
 ###########################################################################
 # OVER Clause Parsing
 ###########################################################################
-def parse_over_clause(over_clause: str) -> list[str]:
+def parse_over_clause(over_clause: str | None) -> list[str]:
     groups = []
+    if over_clause == None:
+        return None
     pattern = r"^[a-zA-Z0-9_]+$"
-    for group in (g.strip() for g in over_clause.split(",")):
+    for group in (group.strip() for group in over_clause.split(",")):
         match = re.match(pattern, group)
         if not match:
             raise ParsingError(ParsingErrorType.OVER_CLAUSE, f"Invalid group name: '{group}")
@@ -107,30 +109,35 @@ def parse_select_clause(select_clause: str, groups: list[str], column_dtypes: di
 ###########################################################################
 # WHERE Clause Parsing
 ###########################################################################
-def parse_where_clause(where_clause: str, column_dtypes: dict[str, np.dtype]) -> ParsedWhereClause:
+def parse_where_clause(where_clause: str | None, column_dtypes: dict[str, np.dtype]) -> ParsedWhereClause | None:
+    if where_clause == None:
+        return None
+    return _parse_where_clause(where_clause, column_dtypes)
+
+def _parse_where_clause(where_clause: str, column_dtypes: dict[str, np.dtype]) -> ParsedWhereClause:
     where_clause = where_clause.strip()
     if _has_wrapping_parenthesis(where_clause):
-        return parse_where_clause(where_clause[1:-1].strip(), column_dtypes)
+        return _parse_where_clause(where_clause[1:-1].strip(), column_dtypes)
 
     or_conditions = _split_by_logical_operator(where_clause, LogicalOperator.OR)
     if len(or_conditions) > 1:
         return CompoundCondition(
             operator=LogicalOperator.OR,
-            conditions=[parse_where_clause(cond, column_dtypes) for cond in or_conditions]
+            conditions=[_parse_where_clause(cond, column_dtypes) for cond in or_conditions]
         )
 
     and_conditions = _split_by_logical_operator(where_clause, LogicalOperator.AND)
     if len(and_conditions) > 1:
         return CompoundCondition(
             operator=LogicalOperator.AND,
-            conditions=[parse_where_clause(cond, column_dtypes) for cond in and_conditions]
+            conditions=[_parse_where_clause(cond, column_dtypes) for cond in and_conditions]
         )
 
     if where_clause.lower().startswith(LogicalOperator.NOT.value.lower()+' '):
         condition = where_clause[len(LogicalOperator.NOT.value)+1:].strip()
         return NotCondition(
             operator=LogicalOperator.NOT,
-            condition=parse_where_clause(condition, column_dtypes)
+            condition=_parse_where_clause(condition, column_dtypes)
         )     
     
     return _parse_simple_condition(where_clause, column_dtypes)
@@ -175,14 +182,29 @@ def _parse_simple_condition(condition: str, column_dtypes: dict[str, np.dtype]) 
 ###########################################################################
 # SUCH THAT Clause Parsing
 ###########################################################################
-def parse_such_that_clause(such_that_clause: str, groups: list[str], column_dtypes: dict[str, np.dtype]) -> ParsedSuchThatClause:
+def parse_such_that_clauses(such_that_clauses: str | None, groups: list[str], column_dtypes: dict[str, np.dtype]) -> list[ParsedSuchThatClause] | None:
+    if such_that_clauses == None:
+        return None
+    parsed_such_that_clauses = []
+    such_that_sections = such_that_clauses.split(',')
+    for section in such_that_sections:
+        parsed_such_that_clauses.append(
+            _parse_such_that_clause(
+                such_that_clause=section,
+                groups=groups,
+                column_dtypes=column_dtypes
+            )
+        )
+    return parsed_such_that_clauses
+
+def _parse_such_that_clause(such_that_clause: str, groups: list[str], column_dtypes: dict[str, np.dtype]) -> ParsedSuchThatClause:
     such_that_clause = such_that_clause.strip()
     if _has_wrapping_parenthesis(such_that_clause):
-        return parse_such_that_clause(such_that_clause[1:-1].strip(), groups, column_dtypes)
+        return _parse_such_that_clause(such_that_clause[1:-1].strip(), groups, column_dtypes)
 
     or_conditions = _split_by_logical_operator(such_that_clause, LogicalOperator.OR)
     if len(or_conditions) > 1:
-        parsed_or_conditions = [parse_such_that_clause(cond, groups, column_dtypes) for cond in or_conditions]
+        parsed_or_conditions = [_parse_such_that_clause(cond, groups, column_dtypes) for cond in or_conditions]
         groups_found = {groupCondition['group'] for groupCondition in parsed_or_conditions if 'group' in groupCondition}
         if len(groups_found) != 1:
             raise ParsingError(ParsingErrorType.SUCH_THAT_CLAUSE, f"Multiple groups found in a clause: '{such_that_clause}'\nEach comma seperated clause must contain only one group.")
@@ -193,7 +215,7 @@ def parse_such_that_clause(such_that_clause: str, groups: list[str], column_dtyp
 
     and_conditions = _split_by_logical_operator(such_that_clause, LogicalOperator.AND)
     if len(and_conditions) > 1:
-        parsed_and_conditions = [parse_such_that_clause(cond, groups, column_dtypes) for cond in and_conditions]
+        parsed_and_conditions = [_parse_such_that_clause(cond, groups, column_dtypes) for cond in and_conditions]
         groups_found = {groupCondition['group'] for groupCondition in parsed_and_conditions if 'group' in groupCondition}
         if len(groups_found) != 1:
             raise ParsingError(ParsingErrorType.SUCH_THAT_CLAUSE, f"Multiple groups found in a clause: '{such_that_clause}'\nEach comma seperated clause must contain only one group.")
@@ -206,7 +228,7 @@ def parse_such_that_clause(such_that_clause: str, groups: list[str], column_dtyp
         condition = such_that_clause[len(LogicalOperator.NOT.value)+1:].strip()
         return NotGroupCondition(
             operator=LogicalOperator.NOT,
-            condition=parse_such_that_clause(condition, groups, column_dtypes)
+            condition=_parse_such_that_clause(condition, groups, column_dtypes)
         )
 
     group_found = None
@@ -269,13 +291,16 @@ def _parse_simple_group_condition(condition: str, group: str, column_dtypes: dic
 ###########################################################################
 # HAVING Clause Parsing
 ###########################################################################
-def parse_having_clause(having_clause: str, groups: list[str], column_dtypes: dict[str, np.dtype]) -> tuple[ParsedHavingClause, AggregatesDict]:
+def parse_having_clause(having_clause: str | None, groups: list[str], column_dtypes: dict[str, np.dtype]) -> tuple[ParsedHavingClause | None, AggregatesDict]:
+    aggregates = AggregatesDict(
+        global_scope=[],
+        group_specific=[]
+    )
+    if having_clause == None:
+        return (None, aggregates)
     return _parse_having_clause(
         having_clause=having_clause,
-        aggregates=AggregatesDict(
-            global_scope=[],
-            group_specific=[]
-        ),
+        aggregates=aggregates,
         groups=groups,
         column_dtypes=column_dtypes
     )
@@ -372,7 +397,9 @@ def _parse_aggregate_condition(condition: str, aggregates: AggregatesDict, group
 ###########################################################################
 # ORDER BY Clause Parsing
 ###########################################################################
-def parse_order_by_clause(order_by_clause: str, number_of_select_columns: int):
+def parse_order_by_clause(order_by_clause: str | None, number_of_select_columns: int):
+    if order_by_clause == None:
+        return 0
     try:
         order_value = int(order_by_clause.strip())  
     except ValueError:

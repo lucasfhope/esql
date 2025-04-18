@@ -4,7 +4,6 @@ import pandas as pd
 
 from src.esql.main import _enforce_allowed_dtypes
 from src.esql.parser.parse import _prepare_query, get_parsed_query
-
 from src.esql.parser.types import ParsedQuery, ParsedSelectClause, AggregatesDict, GlobalAggregate, GroupAggregate, SimpleCondition, CompoundCondition, NotCondition, SimpleGroupCondition, CompoundGroupCondition, NotGroupCondition, GlobalAggregateCondition, GroupAggregateCondition, LogicalOperator
 
 
@@ -198,6 +197,41 @@ def test_get_parsed_query_returns_the_expected_structure(data: pd.DataFrame):
             parsedQuery['having'] == expected['having'] and \
             parsedQuery['order_by'] == expected['order_by'] and \
             parsedQuery['aggregates'] == expected['aggregates']
+
+
+def test_get_parsed_query_returns_expected_structure_with_missing_parts(data: pd.DataFrame):
+    parsedQuery = get_parsed_query(
+        data=data,
+        query='select cust, prod'
+    )
+    expected = expected = ParsedQuery(
+        data=data,
+        select=ParsedSelectClause(
+            columns=['cust', 'prod'],
+            aggregates=AggregatesDict(
+                global_scope=[],
+                group_specific=[]
+            )
+        ),
+        over=None,
+        where=None,
+        such_that=None,
+        having=None,
+        order_by=0,
+        aggregates=AggregatesDict(
+            global_scope=[],
+            group_specific=[]
+        )
+    )
+    assert parsedQuery['select'] == expected['select'] and \
+            parsedQuery['over'] == expected['over'] and \
+            parsedQuery['where'] == expected['where'] and \
+            parsedQuery['such_that'] == expected['such_that'] and \
+            parsedQuery['having'] == expected['having'] and \
+            parsedQuery['order_by'] == expected['order_by'] and \
+            parsedQuery['aggregates'] == expected['aggregates']
+
+
               
 
 

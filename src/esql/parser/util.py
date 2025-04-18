@@ -99,6 +99,8 @@ def parse_select_clause(select_clause: str, groups: list[str], column_dtypes: di
                 columns.append(item)
             else:
                 raise ParsingError(ParsingErrorType.SELECT_CLAUSE, f"Invalid column: '{item}'")
+    if len(columns) == 0:
+        raise ParsingError(ParsingErrorType.SELECT_CLAUSE, f"No grouping attributes given: '{select_clause}'")
 
     return ParsedSelectClause(
         columns=columns,

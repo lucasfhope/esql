@@ -130,7 +130,7 @@ def test_parse_select_clause_returns_expected_structure(column_dtypes: dict[str,
         column_dtypes=column_dtypes
     )
     expected = ParsedSelectClause(
-        columns=['cust', 'prod', 'date'],
+        grouping_attributes=['cust', 'prod', 'date'],
         aggregates=AggregatesDict(
             global_scope=[
                 GlobalAggregate(column='quant', function='sum'),
@@ -678,7 +678,7 @@ def test_parse_having_clause_raises_error_for_non_numeric_comparison_value(colum
 def test_order_by_clause_returns_expected_structure():
     parsedOrderByClause = parse_order_by_clause(
         order_by_clause="3",
-        number_of_select_columns=3
+        number_of_select_grouping_attributes=3
     )
     expected = 3
     assert parsedOrderByClause == expected
@@ -688,7 +688,7 @@ def test_order_by_clause_raises_error_for_non_number_input():
     with pytest.raises(ParsingError) as parsingError:
         parse_order_by_clause(
             order_by_clause="apple",
-            number_of_select_columns=3
+            number_of_select_grouping_attributes=3
         )
     assert parsingError.value.error_type == ParsingErrorType.ORDER_BY_CLAUSE and "Invalid value" in parsingError.value.message
 
@@ -696,7 +696,7 @@ def test_order_by_clause_raises_error_for_non_integer_input():
     with pytest.raises(ParsingError) as parsingError:
         parse_order_by_clause(
             order_by_clause="2.3",
-            number_of_select_columns=3
+            number_of_select_grouping_attributes=3
         )
     assert parsingError.value.error_type == ParsingErrorType.ORDER_BY_CLAUSE and "Invalid value" in parsingError.value.message
 
@@ -713,9 +713,9 @@ def test_order_by_clause_raises_error_for_out_of_range_inputs():
         with pytest.raises(ParsingError) as parsingError:
             parse_order_by_clause(
                 order_by_clause=value,
-                number_of_select_columns=3
+                number_of_select_grouping_attributes=3
             )
-        assert parsingError.value.error_type == ParsingErrorType.ORDER_BY_CLAUSE and "Value out of range" in parsingError.value.message
+        assert parsingError.value.error_type == ParsingErrorType.ORDER_BY_CLAUSE and f"{value} out of range" in parsingError.value.message
 
     
 ###########################################################################
@@ -753,13 +753,6 @@ def test_has_wrapping_parenthesis_resturns_correct_result():
 
 
  
-
-
-
-
-
-
-
 
 if __name__ == '__main__':
    pytest.main()

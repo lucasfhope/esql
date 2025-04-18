@@ -31,7 +31,7 @@ def test_get_parsed_query_returns_the_expected_structure(data: pd.DataFrame):
     expected = ParsedQuery(
         data=data,
         select=ParsedSelectClause(
-            columns=['cust', 'prod'],
+            grouping_attributes=['cust', 'prod'],
             aggregates=AggregatesDict(
                 global_scope=[
                     GlobalAggregate(
@@ -207,7 +207,7 @@ def test_get_parsed_query_returns_expected_structure_with_missing_parts(data: pd
     expected = expected = ParsedQuery(
         data=data,
         select=ParsedSelectClause(
-            columns=['cust', 'prod'],
+            grouping_attributes=['cust', 'prod'],
             aggregates=AggregatesDict(
                 global_scope=[],
                 group_specific=[]

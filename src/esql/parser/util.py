@@ -76,7 +76,7 @@ def parse_over_clause(over_clause: str | None) -> list[str]:
 # SELECT Clause Parsing
 ###########################################################################
 def parse_select_clause(select_clause: str, groups: list[str], column_dtypes: dict[str, np.dtype]) -> ParsedSelectClause:
-    columns: str = []
+    grouping_attributes: str = []
     aggregates = AggregatesDict(
         global_scope=[],
         group_specific=[]
@@ -96,14 +96,14 @@ def parse_select_clause(select_clause: str, groups: list[str], column_dtypes: di
                 aggregates['global_scope'].append(aggregate_result)
         else:
             if item in column_dtypes:
-                columns.append(item)
+                grouping_attributes.append(item)
             else:
                 raise ParsingError(ParsingErrorType.SELECT_CLAUSE, f"Invalid column: '{item}'")
-    if len(columns) == 0:
+    if len(grouping_attributes) == 0:
         raise ParsingError(ParsingErrorType.SELECT_CLAUSE, f"No grouping attributes given: '{select_clause}'")
 
     return ParsedSelectClause(
-        columns=columns,
+        grouping_attributes=grouping_attributes,
         aggregates=aggregates
     )
 
@@ -399,15 +399,15 @@ def _parse_aggregate_condition(condition: str, aggregates: AggregatesDict, group
 ###########################################################################
 # ORDER BY Clause Parsing
 ###########################################################################
-def parse_order_by_clause(order_by_clause: str | None, number_of_select_columns: int):
+def parse_order_by_clause(order_by_clause: str | None, number_of_select_grouping_attributes: int):
     if order_by_clause == None:
         return 0
     try:
         order_value = int(order_by_clause.strip())  
     except ValueError:
         raise ParsingError(ParsingErrorType.ORDER_BY_CLAUSE, f"Invalid value: '{order_by_clause}'")
-    if order_value < 1 or order_value > number_of_select_columns:
-        raise ParsingError(ParsingErrorType.ORDER_BY_CLAUSE, f"Value out of range of selected columns: '{order_by_clause}'")
+    if order_value < 1 or order_value > number_of_select_grouping_attributes:
+        raise ParsingError(ParsingErrorType.ORDER_BY_CLAUSE, f"{order_by_clause.strip()} out of range of the {number_of_select_grouping_attributes} grouping attributes provided in the select clause.")
     return order_value
 
 

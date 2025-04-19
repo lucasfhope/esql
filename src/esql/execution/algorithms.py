@@ -72,118 +72,99 @@ def build_group_table(parsed_select_clause: ParsedSelectClause, groups: list[str
     return grouped_table_list
 
 
-def _evaluate_having_clause(having_condition: ParsedHavingClause, data_map):
-    if isinstance(condition, dict):
-        op = condition.get("operator", "").upper()
-        # Handle NOT operator first, regardless of whether "conditions" exists.
-        if op == "NOT":
-            return not evaluate_having_clause(condition.get("condition"), data_map)
+###############################################################################
+# Evaluation
+###############################################################################
+def _evaluate_having_clause(condition: ParsedHavingClause, data_map: dict[str, str | int | bool | date]):
+    operator = condition.get('operator')
+    if operator == LogicalOperator.NOT:
+        return not evaluate_having_clause(condition.get("condition"), data_map)
 
-        # For compound conditions with a "conditions" list:
-        if "conditions" in condition:
-            if op == "AND":
-                return all(evaluate_having_clause(sub, data_map) for sub in condition["conditions"])
-            elif op == "OR":
-                return any(evaluate_having_clause(sub, data_map) for sub in condition["conditions"])
-            else:
-                raise Exception(f"Unknown compound operator in HAVING clause: {op}")
+    if 'conditions' in condition:
+        if operator == LogicalOperator.AND:
+            return all(evaluate_having_clause(sub, data_map) for sub in condition["conditions"])
+        elif operator == LogicalOperator.OR:
+            return any(evaluate_having_clause(sub, data_map) for sub in condition["conditions"])
+        else:
+            raise RuntimeError(f"Unknown logical operator in HAVING clause: '{operator}'")
 
-        # Otherwise, this is a leaf condition.
-        # Build the key for an aggregate if one is referenced.
-        if "function" in condition:
-            if "group" in condition:
-                key = f"{condition['group']}.{condition['column']}.{condition['function']}"
-            else:
-                key = f"{condition['column']}.{condition['function']}"
+    if 'function' in condition:
+        if "group" in condition:
+            aggregate_key = f"{condition['group']}.{condition['column']}.{condition['function']}"
         else:
-            # Assume it's a normal column condition.
-            key = condition.get("column")
-        
-        actual = data_map.get(key)
-        expected = condition.get("value")
-        
-        # If actual is a datetime.date and expected is a string, convert expected.
-        if isinstance(actual, datetime.date) and isinstance(expected, str):
-            expected = datetime.datetime.strptime(expected, '%Y-%m-%d').date()
-        
-        if op in ['=', '==']:
-            return actual == expected
-        elif op == '>':
-            return actual > expected
-        elif op == '<':
-            return actual < expected
-        elif op == '>=':
-            return actual >= expected
-        elif op == '<=':
-            return actual <= expected
-        elif op == '!=':
-            return actual != expected
-        else:
-            raise Exception(f"Unknown operator in HAVING leaf condition: {op}")
+            aggregate_key = f"{condition['column']}.{condition['function']}"
     else:
-        return bool(condition)
+        raise RuntimeError(f"Could not recognize the condition in the HAVING clause: '{condition}'")
+    
+    return _evaluate_actual_vs_expected_value(
+        actual_value=data_map.get(aggregate_key),
+        condition_value=condition.get('value')
+    )
+
+
+def _evaluate_condition(condition: dict, datatable_row: list, column_indices: dict[str, int]):
+    if 'column' in condition:
+        column = condition.get('column')
+        operator = condition.get('operator')
+        condition_value = condition.get('value')
+        column_index = column_indices.get(column)
+        if not index:
+            raise RuntimeError(f"Column '{column}' not found in datatable")
+        actual_value = row[index]
+        return _evaluate_actual_vs_expected_value(
+            actual_value=data_map.get(aggregate_key),
+            condition_value=condition.get('value')
+        )
+    
+    operator = condition.get('operator')
+    if operator == LogicalOperator.AND:
+        return all(evaluate_condition(simple_condition, datatable_row) for simple_condition in condition.get('conditions', []))
+    elif op == LogicalOperator.OR:
+        return any(evaluate_condition(simple_condition, datatable_row) for simple_conditio in condition.get('conditions', []))
+    elif op == LogicalOperator.NOT:
+        return not evaluate_condition(condition.get('condition'), datatable_row)
+    else:
+        raise RuntimeError(f"Unknown logical operator: {operator}")
+
+    raise RuntimeError(f"Condition could not be evaluated. Expected different structure from parser:\n\n{condition}")
+
+
+def _evaluate_actual_vs_expected_value(actual_value: str | int | bool | date, condition_value: str | int | bool | date) -> bool:
+    if operator in ['=', '==']:
+        return actual_value == condition_value
+    elif operator == '>':
+        return actual_value > condition_value
+    elif operator == '<':
+        return actual_value < condition_value
+    elif operator == '>=':
+        return actual_value >= condition_value
+    elif operator == '<=':
+        return actual_value <= condition_value
+    elif operator == '!=':
+        return actual_value != condition_value
+    else:
+        raise RuntimeError(f"Unknown operator in condition: '{condition}'")
 
 
 
 ###############################################################################
 # Projection and Ordering
 ###############################################################################
-
-def project_select_attributes(hTable, select_attributes, aggregate_descriptors):
-    """
-    Build the final result table by selecting the specified attributes.
-    
-    The final result includes:
-      - The grouping (non-aggregate) columns from select_attributes.
-      - Aggregate columns from aggregate_descriptors. For each aggregate descriptor, the key is
-        built using the same method as in H.aggregate_key(). If a key is missing in an H object's data_map,
-        its value is set to None.
-    
-    Parameters:
-        hTable (list): List of H objects.
-        select_attributes (list): List of non-aggregate column names.
-        aggregate_descriptors (dict): Dictionary with keys 'global' and 'group_specific',
-                                      each a list of aggregate descriptor dictionaries.
-    
-    Returns:
-        list: A list of dictionaries representing the final output rows.
-    """
-    agg_keys = []
-    if 'global' in aggregate_descriptors:
-        for agg in aggregate_descriptors['global']:
-            key = f"{agg['column']}.{agg['function']}"
-            agg_keys.append(key)
-    if 'group_specific' in aggregate_descriptors:
-        for agg in aggregate_descriptors['group_specific']:
-            key = f"{agg['group']}.{agg['column']}.{agg['function']}"
-            agg_keys.append(key)
-    
-    final_attrs = select_attributes + agg_keys
+def project_select_attributes(grouped_table_list: list[GroupedRow]) -> list[dict[str, str | int | bool | date]]:
+    # THIS WILL NOT BE IN THE SAME ORDER AS WAS GIVEN IN THE SELECT CLAUSE
+    grouping_attributes_and_aggregate_keys = grouped_table_list[0].data_map.keys()
     select_table = []
-    for entry in hTable:
+    for grouped_row in grouped_table_list:
         row = {}
-        for attr in final_attrs:
-            row[attr] = entry.data_map.get(attr, None)
+        for column_name in grouping_attributes_and_aggregate_keys:
+            row[column_name] = grouped_row.data_map.get(column_name)
         select_table.append(row)
     return select_table
 
-def order_by_sort(select_table, order_by, grouping_attributes):
-    """
-    Sort the resulting table according to the ORDER BY clause.
-    Instead of sorting on a single column, this version sorts on a tuple of the first N grouping attributes,
-    where N is the value of order_by.
-    
-    Parameters:
-        select_table (list): A list of dictionaries representing the result rows.
-        order_by (int): The number of grouping attributes to sort by.
-        grouping_attributes (list): The list of grouping attributes, in order.
-    
-    Returns:
-        list: The sorted result table.
-    """
-    if order_by:
-        sort_keys = tuple(grouping_attributes[:order_by])
-        select_table.sort(key=lambda row: tuple(row.get(attr, 0) for attr in sort_keys))
+def order_by_sort(select_table: list[dict[str, str | int | bool | date]], order_by: int, grouping_attributes: list[str]):
+    if order_by > 0:
+        column_sort_keys = tuple(grouping_attributes[:order_by])
+        select_table.sort(key=lambda row: tuple(row.get(column_name) for column_name in column_sort_keys))
     return select_table
 
 
@@ -191,175 +172,3 @@ def order_by_sort(select_table, order_by, grouping_attributes):
 
 
 
-###############################################################################
-# Condition Evaluation
-###############################################################################
-
-def _evaluate_condition(condition: dict, datatable_row: list, column_indices: dict[str, int]):
-    # Simple Condition
-    if isinstance(condition, dict) and 'column' in condition:
-        column = condition.get('column')
-        operator = condition.get('operator')
-        condition_value = condition.get('value')
-        column_index = column_indices.get(column)
-        if not index:
-            raise RuntimeError(f"Column '{col}' not found in datatable")
-        actual_value = row[index]
-        if operator in ['=', '==']:
-            return actual_value == condition_value
-        elif operator == '>':
-            return actual_value > condition_value
-        elif operator == '<':
-            return actual_value < condition_value
-        elif operator == '>=':
-            return actual_value >= condition_value
-        elif operator == '<=':
-            return actual_value <= condition_value
-        elif operator == '!=':
-            return actual_value != condition_value
-        else:
-            raise RuntimeError(f"Unknown operator in leaf condition: {operator}")
-    
-    # Compound or not condition
-    elif isinstance(condition, dict):
-        operator = condition.get("operator").upper()
-        if operator == LogicalOperator.AND:
-            return all(evaluate_condition(simple_condition, datatable_row) for simple_conditions in condition.get("conditions", []))
-        elif op == LogicalOperator.OR:
-            return any(evaluate_condition(simple_condition, datatable_row) for simple_condition in condition.get("conditions", []))
-        elif op == LogicalOperator.NOT:
-            return not evaluate_condition(condition.get("condition"), datatable_row)
-        else:
-            raise Exception(f"Unknown compound operator: {op}")
-
-    raise RuntimeError(f"Condition could not be evaluated. Expected different structure from parser:\n\n{condition}")
-
-
-'''
-
-# Global variables for the current datatable, column indexes, and column types.
-DATATABLE = []
-COLUMN_INDEXES = {}
-COLUMN_TYPES = {}  # Mapping of column names to their expected types (e.g., 'date', 'string', etc.)
-
-def normalize_column_indexes(col_indexes, expected_columns=None):
-    """
-    Ensure that col_indexes is a dictionary mapping column names to integer indices.
-    If col_indexes is a list, convert it using the expected order.
-    """
-    if isinstance(col_indexes, dict):
-        return col_indexes
-    elif isinstance(col_indexes, list):
-        if expected_columns is None:
-            return {col: idx for idx, col in enumerate(col_indexes)}
-        else:
-            return {col: idx for idx, col in enumerate(expected_columns)}
-    else:
-        raise TypeError("Column indexes must be either a dict or a list.")
-
-def set_datatable_information(datatable, col_indexes, columns):
-    """
-    Set the global DATATABLE, COLUMN_INDEXES, and COLUMN_TYPES.
-    Converts any column marked as 'date' (in the columns dict) from a string (in 'YYYY-MM-DD' format)
-    to a datetime.date object.
-    
-    Parameters:
-        datatable (list): List of rows (each row is a list/tuple).
-        col_indexes (dict or list): Either a dict mapping column names to indices or a list of column names.
-        columns (dict): Mapping of column names to their types.
-    """
-    global DATATABLE, COLUMN_INDEXES, COLUMN_TYPES
-    expected_columns = list(columns.keys())
-    COLUMN_INDEXES = normalize_column_indexes(col_indexes, expected_columns)
-    COLUMN_TYPES = {col: str(columns[col]).lower() for col in columns}
-    
-    new_datatable = []
-    for row in datatable:
-        new_row = list(row)
-        for col, idx in COLUMN_INDEXES.items():
-            if COLUMN_TYPES.get(col) == 'date' and isinstance(new_row[idx], str):
-                new_row[idx] = datetime.datetime.strptime(new_row[idx], '%Y-%m-%d').date()
-        new_datatable.append(new_row)
-    DATATABLE = new_datatable
-
-def set_datatable(datatable):
-    """
-    Reset the global DATATABLE (for example, after filtering).
-    Reapply the date conversion using COLUMN_TYPES and COLUMN_INDEXES if available.
-    """
-    global DATATABLE
-    if COLUMN_TYPES and COLUMN_INDEXES:
-        new_datatable = []
-        for row in datatable:
-            new_row = list(row)
-            for col, idx in COLUMN_INDEXES.items():
-                if COLUMN_TYPES.get(col) == 'date' and isinstance(new_row[idx], str):
-                    new_row[idx] = datetime.datetime.strptime(new_row[idx], '%Y-%m-%d').date()
-            new_datatable.append(new_row)
-        DATATABLE = new_datatable
-    else:
-        DATATABLE = datatable
-
-###############################################################################
-# Condition Evaluation
-###############################################################################
-
-def evaluate_condition(condition, row):
-    """
-    Recursively evaluate a condition structure against a row.
-    
-    The condition can be:
-      - A leaf condition with keys 'column', 'operator', and 'value'
-      - A compound condition with an 'operator' key ('AND', 'OR', or 'NOT') and either a list of subconditions
-        (key "conditions") or a single subcondition (key "condition").
-    
-    Returns:
-        bool: True if the condition is met by the row, False otherwise.
-    
-    Raises:
-        KeyError: If a referenced column is not found in COLUMN_INDEXES.
-        Exception: If an unknown operator is encountered.
-    """
-    if isinstance(condition, dict) and "column" in condition:
-        # Leaf condition.
-        col = condition.get("column")
-        operator = condition.get("operator")
-        expected_value = condition.get("value")
-        index = COLUMN_INDEXES.get(col)
-        if index is None:
-            raise KeyError(f"Column '{col}' not found in COLUMN_INDEXES.")
-        actual_value = row[index]
-        if isinstance(actual_value, datetime.date) and isinstance(expected_value, str):
-            expected_value = datetime.datetime.strptime(expected_value, '%Y-%m-%d').date()
-        elif isinstance(expected_value, datetime.date) and isinstance(actual_value, str):
-            actual_value = datetime.datetime.strptime(actual_value, '%Y-%m-%d').date()
-        if operator in ['=', '==']:
-            return actual_value == expected_value
-        elif operator == '>':
-            return actual_value > expected_value
-        elif operator == '<':
-            return actual_value < expected_value
-        elif operator == '>=':
-            return actual_value >= expected_value
-        elif operator == '<=':
-            return actual_value <= expected_value
-        elif operator == '!=':
-            return actual_value != expected_value
-        else:
-            raise Exception(f"Unknown operator in leaf condition: {operator}")
-    elif isinstance(condition, dict):
-        # Compound condition.
-        op = condition.get("operator", "").upper()
-        if op == "AND":
-            return all(evaluate_condition(sub, row) for sub in condition.get("conditions", []))
-        elif op == "OR":
-            return any(evaluate_condition(sub, row) for sub in condition.get("conditions", []))
-        elif op == "NOT":
-            return not evaluate_condition(condition.get("condition"), row)
-        else:
-            raise Exception(f"Unknown compound operator: {op}")
-    else:
-        return bool(condition)
-
-
-'''

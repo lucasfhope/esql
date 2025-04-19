@@ -2,7 +2,7 @@ import re
 import pandas as pd
 
 from src.esql.parser.types import ParsedQuery
-from src.esql.parser.util import get_keyword_clauses, parse_over_clause, parse_select_clause, parse_where_clause, parse_such_that_clauses, parse_having_clause, parse_order_by_clause
+from src.esql.parser.util import get_keyword_clauses, parse_over_clause, parse_select_clause, parse_where_clause, parse_such_that_clause, parse_having_clause, parse_order_by_clause
 
 
 def get_parsed_query(data: pd.DataFrame, query: str) -> ParsedQuery:
@@ -56,8 +56,8 @@ def _build_parsed_query(data: pd.DataFrame, query: str) -> ParsedQuery:
         column_dtypes=column_dtypes
     )
 
-    parsed_such_that_clauses = parse_such_that_clauses(
-        such_that_clauses=keyword_clauses["SUCH THAT"],
+    parsed_such_that_clauses = parse_such_that_clause(
+        such_that_clause=keyword_clauses["SUCH THAT"],
         groups=parsed_over_clause,
         column_dtypes=column_dtypes
     )

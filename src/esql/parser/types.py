@@ -78,11 +78,12 @@ ParsedWhereClause = (
     NotCondition
 )
 
-ParsedSuchThatClause = (
+ParsedSuchThatSection = (
     SimpleGroupCondition |
     CompoundGroupCondition |
     NotGroupCondition
 )
+ParsedSuchThatClause = List[ParsedSuchThatSection]
 
 ParsedHavingClause = (
     GlobalAggregateCondition |
@@ -96,7 +97,7 @@ class ParsedQuery(TypedDict):
     select: ParsedSelectClause
     over: List[str] | None
     where: ParsedWhereClause | None
-    such_that: List[ParsedSuchThatClause] | None
+    such_that: ParsedSuchThatSection | None
     having: ParsedHavingClause | None
     order_by: int
     aggregates: AggregatesDict

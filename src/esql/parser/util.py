@@ -4,7 +4,7 @@ import pandas as pd
 from datetime import datetime, date
 
 from src.esql.parser.error import ParsingError, ParsingErrorType
-from src.esql.parser.types import ParsedSelectClause, GlobalAggregate, GroupAggregate, AggregatesDict, ParsedWhereClause, SimpleCondition, CompoundCondition, NotCondition, LogicalOperator, ParsedSuchThatClause, SimpleGroupCondition, CompoundGroupCondition, NotGroupCondition, ParsedHavingClause, CompoundAggregateCondition, NotAggregateCondition, GlobalAggregateCondition, GroupAggregateCondition
+from src.esql.parser.types import ParsedSelectClause, GlobalAggregate, GroupAggregate, AggregatesDict, ParsedWhereClause, SimpleCondition, CompoundCondition, NotCondition, LogicalOperator, ParsedSuchThatClause, ParsedSuchThatSection, SimpleGroupCondition, CompoundGroupCondition, NotGroupCondition, ParsedHavingClause, CompoundAggregateCondition, NotAggregateCondition, GlobalAggregateCondition, GroupAggregateCondition
 
 
 ###########################################################################
@@ -184,67 +184,82 @@ def _parse_simple_condition(condition: str, column_dtypes: dict[str, np.dtype]) 
 ###########################################################################
 # SUCH THAT Clause Parsing
 ###########################################################################
-def parse_such_that_clauses(such_that_clauses: str | None, groups: list[str], column_dtypes: dict[str, np.dtype]) -> list[ParsedSuchThatClause] | None:
-    if such_that_clauses == None:
+def parse_such_that_clause(such_that_clause: str | None, groups: list[str], column_dtypes: dict[str, np.dtype]) -> ParsedSuchThatClause | None:
+    if such_that_clause == None:
         return None
-    parsed_such_that_clauses = []
-    such_that_sections = such_that_clauses.split(',')
+    parsed_such_that_clause = []
+    such_that_sections = such_that_clause.split(',')
     for section in such_that_sections:
-        parsed_such_that_clauses.append(
-            _parse_such_that_clause(
-                such_that_clause=section,
+        parsed_such_that_clause.append(
+            _parse_such_that_section(
+                section=section,
                 groups=groups,
                 column_dtypes=column_dtypes
             )
         )
-    return parsed_such_that_clauses
+    groups_in_parsed_clause = set()
+    for section in parsed_such_that_clause:
+        group = _find_group_in_section(section)
+        if group in groups_in_parsed_clause:
+            raise ParsingError(ParsingErrorType.SUCH_THAT_CLAUSE, f"Multiple sections contain group '{group}'.")
+        groups_in_parsed_clause.add(group)
+    return parsed_such_that_clause
 
-def _parse_such_that_clause(such_that_clause: str, groups: list[str], column_dtypes: dict[str, np.dtype]) -> ParsedSuchThatClause:
-    such_that_clause = such_that_clause.strip()
-    if _has_wrapping_parenthesis(such_that_clause):
-        return _parse_such_that_clause(such_that_clause[1:-1].strip(), groups, column_dtypes)
+def _find_group_in_section(group_condition: ParsedSuchThatSection):
+    if not group_condition:
+        raise ParsingError(ParsingErrorType.SUCH_THAT_CLAUSE, "No group found in group condition.")
+    group = group_condition.get('group')
+    if not group:
+        return _find_group_in_section(group_condition.get('condition') or group_condition.get('conditions')[0])
+    return group
+    
 
-    or_conditions = _split_by_logical_operator(such_that_clause, LogicalOperator.OR)
+def _parse_such_that_section(section: str, groups: list[str], column_dtypes: dict[str, np.dtype]) -> ParsedSuchThatSection:
+    section = section.strip()
+    if _has_wrapping_parenthesis(section):
+        return _parse_such_that_section(section[1:-1].strip(), groups, column_dtypes)
+
+    or_conditions = _split_by_logical_operator(section, LogicalOperator.OR)
     if len(or_conditions) > 1:
-        parsed_or_conditions = [_parse_such_that_clause(cond, groups, column_dtypes) for cond in or_conditions]
+        parsed_or_conditions = [_parse_such_that_section(cond, groups, column_dtypes) for cond in or_conditions]
         groups_found = {groupCondition['group'] for groupCondition in parsed_or_conditions if 'group' in groupCondition}
         if len(groups_found) != 1:
-            raise ParsingError(ParsingErrorType.SUCH_THAT_CLAUSE, f"Multiple groups found in a clause: '{such_that_clause}'\nEach comma seperated clause must contain only one group.")
+            raise ParsingError(ParsingErrorType.SUCH_THAT_CLAUSE, f"Multiple groups found in a clause: '{section}'\nEach comma seperated clause must contain only one group.")
         return CompoundGroupCondition(
             operator=LogicalOperator.OR,
             conditions=parsed_or_conditions
         )
 
-    and_conditions = _split_by_logical_operator(such_that_clause, LogicalOperator.AND)
+    and_conditions = _split_by_logical_operator(section, LogicalOperator.AND)
     if len(and_conditions) > 1:
-        parsed_and_conditions = [_parse_such_that_clause(cond, groups, column_dtypes) for cond in and_conditions]
+        parsed_and_conditions = [_parse_such_that_section(cond, groups, column_dtypes) for cond in and_conditions]
         groups_found = {groupCondition['group'] for groupCondition in parsed_and_conditions if 'group' in groupCondition}
         if len(groups_found) != 1:
-            raise ParsingError(ParsingErrorType.SUCH_THAT_CLAUSE, f"Multiple groups found in a clause: '{such_that_clause}'\nEach comma seperated clause must contain only one group.")
+            raise ParsingError(ParsingErrorType.SUCH_THAT_CLAUSE, f"Multiple groups found in a clause: '{section}'\nEach comma seperated clause must contain only one group.")
         return CompoundGroupCondition(
             operator=LogicalOperator.AND,
             conditions=parsed_and_conditions
         )
 
-    if such_that_clause.lower().startswith(LogicalOperator.NOT.value.lower()+' '):
-        condition = such_that_clause[len(LogicalOperator.NOT.value)+1:].strip()
+    if section.lower().startswith(LogicalOperator.NOT.value.lower()+' '):
+        condition = section[len(LogicalOperator.NOT.value)+1:].strip()
         return NotGroupCondition(
             operator=LogicalOperator.NOT,
-            condition=_parse_such_that_clause(condition, groups, column_dtypes)
+            condition=_parse_such_that_section(condition, groups, column_dtypes)
         )
 
     group_found = None
     for group in groups:
-        if such_that_clause.startswith(group + '.'):
+        if section.startswith(group + '.'):
             group_found = group
             break
     if not group_found:
-        raise ParsingError(ParsingErrorType.SUCH_THAT_CLAUSE, f"No valid group found in condition: '{such_that_clause}'")
+        raise ParsingError(ParsingErrorType.SUCH_THAT_CLAUSE, f"No valid group found in condition: '{section}'")
 
-    if any(other_group + '.' in such_that_clause for other_group in groups if other_group != group_found):
-        raise ParsingError(ParsingErrorType.SUCH_THAT_CLAUSE, f"Multiple groups found in a clause: '{such_that_clause}'\nEach comma seperated clause must contain only one group.")
+    if any(other_group + '.' in section for other_group in groups if other_group != group_found):
+        raise ParsingError(ParsingErrorType.SUCH_THAT_CLAUSE, f"Multiple groups found in a clause: '{section}'\nEach comma seperated clause must contain only one group.")
     
-    return _parse_simple_group_condition(such_that_clause, group_found, column_dtypes)
+    return _parse_simple_group_condition(section, group_found, column_dtypes)
     
 
 def _parse_simple_group_condition(condition: str, group: str, column_dtypes: dict[str, np.dtype]) -> SimpleGroupCondition:
@@ -278,7 +293,7 @@ def _parse_simple_group_condition(condition: str, group: str, column_dtypes: dic
         value=value,
         column_dtypes=column_dtypes,
         condition=condition,
-        error_type=ParsingErrorType.WHERE_CLAUSE
+        error_type=ParsingErrorType.SUCH_THAT_CLAUSE
     )
 
     return SimpleGroupCondition(

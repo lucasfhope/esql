@@ -199,20 +199,19 @@ def parse_such_that_clause(such_that_clause: str | None, groups: list[str], colu
         )
     groups_in_parsed_clause = set()
     for section in parsed_such_that_clause:
-        group = _find_group_in_section(section)
+        group = find_group_in_such_that_section(section)
         if group in groups_in_parsed_clause:
             raise ParsingError(ParsingErrorType.SUCH_THAT_CLAUSE, f"Multiple sections contain group '{group}'.")
         groups_in_parsed_clause.add(group)
     return parsed_such_that_clause
 
-def _find_group_in_section(group_condition: ParsedSuchThatSection):
+def find_group_in_such_that_section(group_condition: ParsedSuchThatSection):
     if not group_condition:
         raise ParsingError(ParsingErrorType.SUCH_THAT_CLAUSE, "No group found in group condition.")
     group = group_condition.get('group')
     if not group:
-        return _find_group_in_section(group_condition.get('condition') or group_condition.get('conditions')[0])
+        return find_group_in_such_that_section(group_condition.get('condition') or group_condition.get('conditions')[0])
     return group
-    
 
 def _parse_such_that_section(section: str, groups: list[str], column_dtypes: dict[str, np.dtype]) -> ParsedSuchThatSection:
     section = section.strip()
@@ -606,7 +605,6 @@ def _split_by_logical_operator(condition: str, operator: LogicalOperator) -> lis
 
     if current.strip():
         parts.append(current.strip())
-
     return parts
 
 

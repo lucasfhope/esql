@@ -142,7 +142,7 @@ def test_parse_select_clause_returns_expected_structure(column_dtypes: dict[str,
                 GroupAggregate(column='month', function='count', group='3')
             ]
         ),
-        aggregate_keys_in_order=['1.quant.max', '2.quant.min', 'quant.sum', '3.quant.avg', '3.month.count']
+        select_items_in_order=['cust', 'prod', 'date', '1.quant.max', '2.quant.min', 'quant.sum', '3.quant.avg', '3.month.count']
 
     )
     assert parsedSelectClause == expected

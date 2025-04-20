@@ -72,7 +72,7 @@ class NotAggregateCondition(TypedDict):
 class ParsedSelectClause(TypedDict):
     grouping_attributes: List[str]
     aggregates: AggregatesDict
-    aggregate_keys_in_order: List[str]
+    select_items_in_order: List[str]
 
 ParsedWhereClause = (
     SimpleCondition |

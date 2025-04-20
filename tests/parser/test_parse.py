@@ -62,7 +62,7 @@ def test_get_parsed_query_returns_the_expected_structure(sales_test_data: pd.Dat
                 ]
                     
             ),
-            aggregate_keys_in_order=['quant.avg', 'g1.quant.sum', 'g2.state.count', 'quant.min', 'g3.quant.max']
+            select_items_in_order=['cust', 'quant.avg', 'prod', 'g1.quant.sum', 'g2.state.count', 'quant.min', 'g3.quant.max']
         ),
         over=['g1', 'g2', 'g3'],
         where=CompoundCondition(
@@ -213,7 +213,7 @@ def test_get_parsed_query_returns_expected_structure_with_missing_parts(sales_te
                 global_scope=[],
                 group_specific=[]
             ),
-            aggregate_keys_in_order=[]
+            select_items_in_order=['cust', 'prod']
         ),
         over=None,
         where=None,

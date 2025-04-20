@@ -76,12 +76,12 @@ def parse_over_clause(over_clause: str | None) -> list[str]:
 # SELECT Clause Parsing
 ###########################################################################
 def parse_select_clause(select_clause: str, groups: list[str], column_dtypes: dict[str, np.dtype]) -> ParsedSelectClause:
-    grouping_attributes: str = []
+    select_items_in_order = []
+    grouping_attributes = []
     aggregates = AggregatesDict(
         global_scope=[],
         group_specific=[]
     )
-    aggregate_keys_in_order: List[GlobalAggregate | GroupAggregate] = []
     
     for item in (s.strip() for s in select_clause.split(',')):
         if '.' in item:
@@ -95,19 +95,19 @@ def parse_select_clause(select_clause: str, groups: list[str], column_dtypes: di
                 aggregates['group_specific'].append(aggregate_result)
             else:
                 aggregates['global_scope'].append(aggregate_result)
-            aggregate_keys_in_order.append(item)
         else:
             if item in column_dtypes:
                 grouping_attributes.append(item)
             else:
                 raise ParsingError(ParsingErrorType.SELECT_CLAUSE, f"Invalid column: '{item}'")
+        select_items_in_order.append(item)
     if len(grouping_attributes) == 0:
         raise ParsingError(ParsingErrorType.SELECT_CLAUSE, f"No grouping attributes given: '{select_clause}'")
 
     return ParsedSelectClause(
         grouping_attributes=grouping_attributes,
         aggregates=aggregates,
-        aggregate_keys_in_order = aggregate_keys_in_order
+        select_items_in_order=select_items_in_order
     )
 
 

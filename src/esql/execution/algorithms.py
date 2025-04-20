@@ -157,20 +157,20 @@ def _evaluate_actual_vs_expected_value(actual_value: str | int | bool | date, co
 # Projection and Ordering
 ###############################################################################
 def project_select_attributes(parsed_select_clause: ParsedSelectClause, grouped_table: list[GroupedRow]) -> list[dict[str, str | int | bool | date]]:
-    grouping_attributes_and_aggregate_keys = parsed_select_clause['grouping_attributes'] + parsed_select_clause['aggregate_keys_in_order']
+    select_items = parsed_select_clause['select_items_in_order']
     projected_table = []
     for grouped_row in grouped_table:
         row = {}
-        for column_name in grouping_attributes_and_aggregate_keys:
-            row[column_name] = grouped_row.data_map.get(column_name)
+        for select_item in select_items:
+            row[select_item] = grouped_row.data_map.get(select_item)
         projected_table.append(row)
     return projected_table
 
 
 def order_by_sort(projected_table: list[dict[str, str | int | bool | date]], order_by: int, grouping_attributes: list[str]) -> list[dict[str, str | int | bool | date]]:
     if order_by > 0:
-        column_sort_keys = tuple(grouping_attributes[:order_by])
-        projected_table.sort(key=lambda row: tuple(row.get(column_name) for column_name in column_sort_keys))
+        grouping_attribute_sort_keys = tuple(grouping_attributes[:order_by])
+        projected_table.sort(key=lambda row: tuple(row.get(grouping_attribute) for grouping_attribute in grouping_attribute_sort_keys))
     return projected_table
 
 

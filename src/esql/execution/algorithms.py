@@ -1,11 +1,11 @@
-from datetime import datetime, date
 import numpy as np
+from datetime import  date
 
+from src.esql.execution.groupedRow import GroupedRow
 from src.esql.execution.error import RuntimeError
-
 from src.esql.parser.util import find_group_in_such_that_section
 from src.esql.parser.types import ParsedSelectClause, ParsedWhereClause, ParsedSuchThatClause, ParsedHavingClause, AggregatesDict, LogicalOperator
-from src.esql.execution.groupedRow import GroupedRow
+
 
 def build_grouped_table(parsed_select_clause: ParsedSelectClause, groups: list[str] | None, parsed_where_clause: ParsedWhereClause | None, parsed_such_that_clause: ParsedSuchThatClause, parsed_having_clause: ParsedHavingClause, aggregates: AggregatesDict, datatable: list[list[int | str | bool | date]], column_indices: dict[str, int]):
     grouping_attributes = parsed_select_clause['grouping_attributes']
@@ -51,7 +51,7 @@ def build_grouped_table(parsed_select_clause: ParsedSelectClause, groups: list[s
             for datatable_row in filtered_datatable:
                 if _evaluate_condition(
                     condition=group_such_that_section,
-                    datatable_row=datatable_row,
+                    row=datatable_row,
                     column_indices=column_indices
                 ):
                     grouping_attribute_combination = tuple(datatable_row[column_indices[attribute]] for attribute in grouping_attributes)
@@ -71,7 +71,7 @@ def build_grouped_table(parsed_select_clause: ParsedSelectClause, groups: list[s
     
     if parsed_having_clause:
         grouped_table = [grouped_row for grouped_row in grouped_table
-            if evaluate_having_clause(
+            if _evaluate_having_clause(
                 condition=parsed_having_clause,
                 data_map=grouped_row.data_map
             )
@@ -83,9 +83,9 @@ def build_grouped_table(parsed_select_clause: ParsedSelectClause, groups: list[s
 # Evaluation
 ###############################################################################
 def _evaluate_condition(condition: dict, row: list, column_indices: dict[str, int]) -> bool:
+    operator = condition.get('operator')
     if 'column' in condition:
         column = condition.get('column')
-        operator = condition.get('operator')
         condition_value = condition.get('value')
         column_index = column_indices.get(column)
         if not column_index:
@@ -97,37 +97,56 @@ def _evaluate_condition(condition: dict, row: list, column_indices: dict[str, in
             condition_value=condition_value
         )
     
-    operator = condition.get('operator')
     if operator == LogicalOperator.AND:
-        return all(evaluate_condition(simple_condition, datatable_row) for simple_condition in condition.get('conditions', []))
-    elif op == LogicalOperator.OR:
-        return any(evaluate_condition(simple_condition, datatable_row) for simple_conditio in condition.get('conditions', []))
-    elif op == LogicalOperator.NOT:
-        return not evaluate_condition(condition.get('condition'), datatable_row)
+        return all(_evaluate_condition(
+            condition=and_condition,
+            row=row,
+            column_indices=column_indices
+        ) for and_condition in condition.get('conditions', []))
+    elif operator == LogicalOperator.OR:
+        return any(_evaluate_condition(
+            condition=or_condition,
+            row=row,
+            column_indices=column_indices
+        ) for or_condition in condition.get('conditions', []))
+    elif operator == LogicalOperator.NOT:
+        return not _evaluate_condition(
+            condition=condition.get('condition'),
+            row=row,
+            column_indices=column_indices
+        )
     else:
         raise RuntimeError(f"Unknown logical operator: {operator}")
-
-    raise RuntimeError(f"Condition could not be evaluated. Expected different structure from parser:\n\n{condition}")
 
 
 def _evaluate_having_clause(condition: ParsedHavingClause, data_map: dict[str, str | int | bool | date]) -> bool:
     operator = condition.get('operator')
     if operator == LogicalOperator.NOT:
-        return not evaluate_having_clause(condition.get("condition"), data_map)
+        return not _evaluate_having_clause(
+            condition=condition.get('condition'),
+            data_map=data_map
+        )
 
     if 'conditions' in condition:
         if operator == LogicalOperator.AND:
-            return all(evaluate_having_clause(and_condition, data_map) for and_condition in condition["conditions"])
+            return all(_evaluate_having_clause(
+                condition=and_condition,
+                data_map=data_map
+            ) for and_condition in condition['conditions'])
         elif operator == LogicalOperator.OR:
-            return any(evaluate_having_clause(or_condition, data_map) for or_condition in condition["conditions"])
+            return any(_evaluate_having_clause(
+                condition=or_condition, 
+                data_map=data_map
+            ) for or_condition in condition['conditions'])
         else:
             raise RuntimeError(f"Unknown logical operator in HAVING clause: '{operator}'")
 
-    if 'function' in condition:
-        if 'group' in condition:
-            aggregate_key = f"{condition['group']}.{condition['column']}.{condition['function']}"
+    condition_aggregate = condition.get('aggregate')
+    if 'function' in condition_aggregate:
+        if 'group' in condition_aggregate:
+            aggregate_key = f"{condition_aggregate['group']}.{condition_aggregate['column']}.{condition_aggregate['function']}"
         else:
-            aggregate_key = f"{condition['column']}.{condition['function']}"
+            aggregate_key = f"{condition_aggregate['column']}.{condition_aggregate['function']}"
     else:
         raise RuntimeError(f"Could not recognize the condition in the HAVING clause: '{condition}'")
     

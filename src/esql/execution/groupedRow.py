@@ -69,10 +69,10 @@ class GroupedRow:
         for aggregate in self.aggregates['global_scope'] + self.aggregates['group_specific']:
             if aggregate['function'] == 'avg':
                 aggregate_key = self._aggregate_key(aggregate)
-                if isinstance(self._data_map[aggregate_key], dict):
+                if self._data_map.get(aggregate_key):
                     _sum, _count = self._data_map[aggregate_key]['sum'], self._data_map[aggregate_key]['count']
-                    _avg = round(_sum/_value, 2)
-                    self._data_map[aggregate_key] = avg_val
+                    _avg = round(_sum/_count, 2)
+                    self._data_map[aggregate_key] = _avg
 
     def _aggregate_key(self, aggregate: GlobalAggregate | GroupAggregate) -> str:
         if 'group' in aggregate:

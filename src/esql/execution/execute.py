@@ -6,7 +6,6 @@ from src.esql.execution import algorithms
 
 def execute(parsed_query: ParsedQuery) -> pd.DataFrame:
     pd_datatable = parsed_query['data']
-    column_dtypes = pd_datatable.dtypes.to_dict()
     columns = pd_datatable.columns.tolist()
     column_indices = { column: index for index, column in enumerate(columns) }
     datatable = pd_datatable.values.tolist()

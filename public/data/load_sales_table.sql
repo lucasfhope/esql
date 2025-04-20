@@ -1,6 +1,8 @@
 /*---------------------------------------------------------------------
 
-1. Use the following SQL statement to create the 'sales' table first in PostgreSQL.
+1. Use the following SQL statement to create the 'sales' table first.
+
+---------------------------------------------------------------------*/
 
 	create table sales
 	(
@@ -13,8 +15,10 @@
 		quant	integer,
 		date	date,
 		credit  boolean
-	)
-	
+	);
+
+/*---------------------------------------------------------------------
+
 2. To load the data into the 'sales' table, copy and paste the following INSERT statements and execute.
 
    An alternative to copying & pasting would be:

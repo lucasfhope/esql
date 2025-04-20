@@ -5,10 +5,9 @@ from src.esql.execution.error import RuntimeError
 
 from src.esql.parser.util import find_group_in_such_that_section
 from src.esql.parser.types import ParsedSelectClause, ParsedWhereClause, ParsedSuchThatClause, ParsedHavingClause, AggregatesDict, LogicalOperator
+from src.esql.execution.groupedRow import GroupedRow
 
-from src.esq.execution.groupedRow import GroupedRow
-
-def build_grouped_table(parsed_select_clause: ParsedSelectClause, groups: list[str] | None, parsed_where_clause: ParsedWhereClause | None, parsed_such_that_clause: ParsedSuchThatClause, parsed_having_clause: ParsedHavaingClause, aggregates: AggregatesDict, datatable: list[list[int | str | bool | date]], column_indices: dict[str, int]):
+def build_grouped_table(parsed_select_clause: ParsedSelectClause, groups: list[str] | None, parsed_where_clause: ParsedWhereClause | None, parsed_such_that_clause: ParsedSuchThatClause, parsed_having_clause: ParsedHavingClause, aggregates: AggregatesDict, datatable: list[list[int | str | bool | date]], column_indices: dict[str, int]):
     grouping_attributes = parsed_select_clause['grouping_attributes']
     global_aggregates = aggregates['global_scope']
     group_aggregates = aggregates['group_specific']
@@ -27,11 +26,16 @@ def build_grouped_table(parsed_select_clause: ParsedSelectClause, groups: list[s
     for datatable_row in filtered_datatable:
         grouping_attribute_combination = tuple(datatable_row[column_indices[attribute]] for attribute in grouping_attributes)
         if grouping_attribute_combination in grouped_rows:
-            grouped_row = grouped_rowse.get(grouping_attribute_combination)
+            grouped_row = grouped_row.get(grouping_attribute_combination)
             for aggregate in global_aggregates:
                 grouped_row.update_data_map(aggregate, datatable_row)
         else:
-            grouped_row = GroupedRow(grouping_attributes, aggregates, datatable_row)
+            grouped_row = GroupedRow(
+                grouping_attributes=grouping_attributes,
+                aggregates=aggregates,
+                initial_row=datatable_row,
+                column_indices=column_indices
+            )
             grouped_rows[grouping_attribute_combination] = grouped_row 
     
     if parsed_such_that_clause: 
@@ -55,14 +59,17 @@ def build_grouped_table(parsed_select_clause: ParsedSelectClause, groups: list[s
                     if grouped_row:
                         for aggregate in group_aggregates:
                             if aggregate['group'] == group:
-                                grouped_row.update_data_map(aggregate, datatable_row)
+                                grouped_row.update_data_map(
+                                    aggregate=aggregate,
+                                    row=datatable_row
+                                )
 
     grouped_table = list(grouped_rows.values())
 
     for grouped_row in grouped_table:
         grouped_row.convert_avg_in_data_map()
     
-    if having_conditions:
+    if parsed_having_clause:
         grouped_table = [grouped_row for grouped_row in grouped_table
             if evaluate_having_clause(
                 condition=parsed_having_clause,

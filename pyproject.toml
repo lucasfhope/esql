@@ -17,6 +17,9 @@ packages = [{include = "esql", from = "src"}]
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.5"
+dotenv = "^0.9.9"
+psycopg2 = "^2.9.10"
+pytest-timeout = "^2.3.1"
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]

@@ -1,6 +1,6 @@
 from typing import TypedDict
 from src.esql.parser.types import AggregatesDict, GlobalAggregate, GroupAggregate
-from datetime imort date
+from datetime import date
 
 
 class GroupedRow:
@@ -12,14 +12,14 @@ class GroupedRow:
         self.grouping_attributes = grouping_attributes
         self.aggregates = aggregates
         self._initial_row = initial_row
-        self._data_map = {}
-        self._build_data_map()
         self._column_indices = column_indices
+        self._data_map = self._build_data_map()
 
-    def _build_data_map(self) -> None:
+    def _build_data_map(self) -> dict[str, str | int | bool | date]:
+        data_map = {}
         for attribute in self.grouping_attributes:
             index = self._column_indices[attribute]
-            self._data_map[attribute] = self._initial_row[index]
+            data_map[attribute] = self._initial_row[index]
         for aggregate in self.aggregates['global_scope']:
             column = aggregate['column']
             function = aggregate['function']
@@ -27,13 +27,14 @@ class GroupedRow:
             value = self.initial_row[index] or 0
             aggregate_key = self._aggregate_key(aggregate)
             if aggregate['function'] in ['sum', 'min', 'max']:
-                self._data_map[aggregate_key] = value
+                data_map[aggregate_key] = value
             elif func == 'count':
-                self._data_map[aggregate_key] = 1
+                data_map[aggregate_key] = 1
             elif func == 'avg':
-                self._data_map[aggregate_key] = {'sum': value, 'count': 1}
+                data_map[aggregate_key] = {'sum': value, 'count': 1}
+        return data_map
 
-    def update_data_map(self, aggregate: GlobalAggregate | GroupAggregate, row: list[str | int | bool| date]):
+    def update_data_map(self, aggregate: GlobalAggregate | GroupAggregate, row: list[str | int | bool| date]) -> None:
         column = aggregate['column']
         function = aggregate['function']
         index = self._column_indices[column]
@@ -64,7 +65,7 @@ class GroupedRow:
                 self._data_map[aggregate_key] = {'sum': new_sum, 'count': new_count}
 
     # This must be called on all GroupedRows after they have been filtered by the WHERE and SUCH THAT clauses
-    def convert_avg_in_data_map(self):
+    def convert_avg_in_data_map(self) -> None:
         for aggregate in self.aggregates['global_scope'] + self.aggregates['group_specific']:
             if aggregate['function'] == 'avg':
                 aggregate_key = self._aggregate_key(aggregate)

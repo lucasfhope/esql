@@ -6,11 +6,11 @@ from datetime import date
 from src.esql.parser.util import get_keyword_clauses, parse_select_clause, parse_over_clause, parse_where_clause, _parse_such_that_section, parse_such_that_clause, parse_having_clause, parse_order_by_clause, _split_by_logical_operator, _split_condition, _has_wrapping_parenthesis
 from src.esql.parser.types import ParsedSelectClause, AggregatesDict, GlobalAggregate, GroupAggregate, ParsedWhereClause, LogicalOperator, SimpleCondition, CompoundCondition, NotCondition, SimpleGroupCondition, CompoundGroupCondition, NotGroupCondition, ParsedSuchThatClause, CompoundAggregateCondition, NotAggregateCondition, GlobalAggregateCondition, GroupAggregateCondition
 from src.esql.parser.error import ParsingError, ParsingErrorType
-from tests.parser.test_parse import data
+from tests.parser.test_parse import sales_test_data
 
 @pytest.fixture
-def column_dtypes(data: pd.DataFrame) -> dict[str, np.dtype]: 
-    column_dtypes = data.dtypes.to_dict()
+def column_dtypes(sales_test_data: pd.DataFrame) -> dict[str, np.dtype]: 
+    column_dtypes = sales_test_data.dtypes.to_dict()
     return column_dtypes
 
 

@@ -2,13 +2,13 @@ import pytest
 import numpy as np
 import pandas as pd
 
-from src.esql.main import _enforce_allowed_dtypes
+from src.esql.accessor import _enforce_allowed_dtypes
 from src.esql.parser.parse import _prepare_query, get_parsed_query
 from src.esql.parser.types import ParsedQuery, ParsedSelectClause, AggregatesDict, GlobalAggregate, GroupAggregate, SimpleCondition, CompoundCondition, NotCondition, SimpleGroupCondition, CompoundGroupCondition, NotGroupCondition, GlobalAggregateCondition, GroupAggregateCondition, LogicalOperator
 
 
 @pytest.fixture
-def data() -> dict[str, np.dtype]: 
+def sales_test_data() -> pd.DataFrame: 
     data = _enforce_allowed_dtypes(
         pd.read_csv(
             'public/data/sales.csv'
@@ -23,13 +23,13 @@ def test_prepare_query_returns_expected_structure():
     result = _prepare_query(query)
     assert result == expected
 
-def test_get_parsed_query_returns_the_expected_structure(data: pd.DataFrame):
+def test_get_parsed_query_returns_the_expected_structure(sales_test_data: pd.DataFrame):
     parsedQuery = get_parsed_query(
-        data=data,
+        data=sales_test_data,
         query='SELECT cust,         quant.avg,   prod,    g1.quant.sum,g2.state.count, quant.min,  g3.quant.max OVER g1,g2,g3      WHERE not cust != "DAN" and month > 5 or prod =   "APLEHSVCDGhsfjadmg_hgdoe3v¡=3h8d" Such thAt g1.year = 2020 and not g1.month    = 10,g2.state!="NY",g3.day=1 or g3.day=31 HAvING g1.quant.avg > 0.5 orDer by     1'
     )
     expected = ParsedQuery(
-        data=data,
+        data=sales_test_data,
         select=ParsedSelectClause(
             grouping_attributes=['cust', 'prod'],
             aggregates=AggregatesDict(
@@ -200,13 +200,13 @@ def test_get_parsed_query_returns_the_expected_structure(data: pd.DataFrame):
             parsedQuery['aggregates'] == expected['aggregates']
 
 
-def test_get_parsed_query_returns_expected_structure_with_missing_parts(data: pd.DataFrame):
+def test_get_parsed_query_returns_expected_structure_with_missing_parts(sales_test_data: pd.DataFrame):
     parsedQuery = get_parsed_query(
-        data=data,
+        data=sales_test_data,
         query='select cust, prod'
     )
     expected = expected = ParsedQuery(
-        data=data,
+        data=sales_test_data,
         select=ParsedSelectClause(
             grouping_attributes=['cust', 'prod'],
             aggregates=AggregatesDict(
@@ -235,8 +235,5 @@ def test_get_parsed_query_returns_expected_structure_with_missing_parts(data: pd
 
 
               
-
-
-
 if __name__ == '__main__':
     pytest.main()

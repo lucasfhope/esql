@@ -1,1 +1,1 @@
-from .main import ESQLAccessor
+from src.esql.accessor import ESQLAccessor

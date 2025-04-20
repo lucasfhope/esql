@@ -18,6 +18,7 @@ class GroupAggregate(GlobalAggregate):
 class AggregatesDict(TypedDict):
     global_scope: List[GlobalAggregate]
     group_specific: List[GroupAggregate]
+    
 
 
 class LogicalOperator(Enum):
@@ -71,6 +72,7 @@ class NotAggregateCondition(TypedDict):
 class ParsedSelectClause(TypedDict):
     grouping_attributes: List[str]
     aggregates: AggregatesDict
+    aggregates_in_order: List[GlobalAggregate | GroupAggregate]
 
 ParsedWhereClause = (
     SimpleCondition |

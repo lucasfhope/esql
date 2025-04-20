@@ -125,7 +125,7 @@ def test_parse_over_clause_raises_error_for_invalid_characters():
 ###########################################################################
 def test_parse_select_clause_returns_expected_structure(column_dtypes: dict[str, np.dtype]):
     parsedSelectClause = parse_select_clause(
-        select_clause="cust, prod, date, quant.sum, 1.quant.max, 2.quant.min, 3.quant.avg, 3.month.count",
+        select_clause="cust, prod, date, 1.quant.max, 2.quant.min, quant.sum, 3.quant.avg, 3.month.count",
         groups=['1','2','3'],
         column_dtypes=column_dtypes
     )
@@ -139,9 +139,17 @@ def test_parse_select_clause_returns_expected_structure(column_dtypes: dict[str,
                 GroupAggregate(column='quant', function='max', group='1'),
                 GroupAggregate(column='quant', function='min', group='2'),
                 GroupAggregate(column='quant', function='avg', group='3'),
-                GroupAggregate(column='month', function='count', group='3'),
+                GroupAggregate(column='month', function='count', group='3')
             ]
-        )
+        ),
+        aggregates_in_order=[
+            GroupAggregate(column='quant', function='max', group='1'),
+            GroupAggregate(column='quant', function='min', group='2'),
+            GlobalAggregate(column='quant', function='sum'),
+            GroupAggregate(column='quant', function='avg', group='3'),
+            GroupAggregate(column='month', function='count', group='3')
+        ]
+
     )
     assert parsedSelectClause == expected
 

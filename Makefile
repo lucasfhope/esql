@@ -2,14 +2,10 @@
 
 # The 'run' target executes your Python script with poetry.
 
-install:
-	poetry install --no-dev
+install :; poetry install --no-dev
 
-install-dev:
-	poetry install
+install-dev :; poetry install
 
-build:
-	poetry build
+build :; poetry build
 
-test:
-	poetry run pytest -vv
+test :; poetry run pytest -vv

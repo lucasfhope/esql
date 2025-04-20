@@ -41,5 +41,14 @@ jobs:
       - name: Install dependencies
         run: poetry install
 
-      - name: Run tests
-        run: poetry run pytest -v
+      - name: Run tests with PYTHONPATH set (cross-platform)
+        run: |
+            $Env:PYTHONPATH = "src"
+            poetry run pytest -v
+        if: runner.os == 'Windows'
+        shell: pwsh
+      
+      - name: Run tests with PYTHONPATH set
+        run: PYTHONPATH=src poetry run pytest -v
+        if: runner.os != 'Windows'
+      

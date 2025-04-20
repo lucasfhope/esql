@@ -57,14 +57,96 @@ def _test_query(sql: str, esql: str, data: pd.DataFrame) -> None:
 
 
 @pytest.mark.timeout(5)
-def test_simple_query(sales_test_data: pd.DataFrame):
+def test_select_query(sales_test_data: pd.DataFrame):
     sql = '''
         SELECT cust, prod, day, month, year, state, quant, date, credit FROM sales 
     '''
     esql = '''
         SELECT cust, prod, day, month, year, state, quant, date, credit 
     '''
-    _test_query(sql, esql, sales_test_data)
+    _test_query(sql, esql, data=sales_test_data)
+
+@pytest.mark.timeout(5)
+def test_integer_where_query(sales_test_data: pd.DataFrame):
+    sql = """
+        SELECT cust, quant
+        FROM sales
+        WHERE quant != 100
+        GROUP BY cust, quant
+    """
+    esql = """
+        SELECT cust, quant
+        WHERE quant != 100
+    """
+    _test_query(sql, esql, data=sales_test_data)
+
+@pytest.mark.timeout(5)
+def test_float_where_query(sales_test_data: pd.DataFrame):
+    sql = """
+        SELECT cust, quant
+        FROM sales
+        WHERE quant <= 55.5
+        GROUP BY cust, quant
+    """
+    esql = """
+        SELECT cust, quant
+        WHERE quant <= 55.5
+    """
+    _test_query(sql, esql, data=sales_test_data)
+
+@pytest.mark.timeout(5)
+def test_boolean_where_query(sales_test_data: pd.DataFrame):
+    sql = """
+        SELECT cust, prod, quant, date
+        FROM sales
+        where credit = true
+    """
+    esql = """
+        SELECT cust, prod, quant, date
+        Where credit
+    """
+    _test_query(sql, esql, data=sales_test_data)
+
+@pytest.mark.timeout(5)
+def test_gt_date_where_query(sales_test_data: pd.DataFrame):
+    sql = """
+        select cust,prod, sum(quant) from sales
+        where date > '2019-04-12'
+        group by cust, prod
+    """
+    esql = """
+        SELECT cust, prod, quant.sum
+        where date > '2019-04-12'
+    """
+    _test_query(sql, esql, data=sales_test_data)
+
+@pytest.mark.timeout(5)
+def test_eq_date_where_query(sales_test_data: pd.DataFrame):
+    sql = """
+        select cust,prod, count(month) from sales
+        where date = '2020-4-13'
+        group by cust, prod
+    """
+    esql = """
+        SELECT cust, prod, month.count
+        where date = '2020-4-13'
+    """
+    _test_query(sql, esql, data=sales_test_data)
+
+@pytest.mark.timeout(5)
+def test_string_where_query(sales_test_data: pd.DataFrame):
+    sql = """
+        SELECT cust, prod, year
+        from sales
+        WHERE state = 'NY'
+        GROUP BY cust, prod, year
+    """
+    esql = """
+        SELECT cust, prod, year
+        WHERE state = 'NY'
+    """
+    _test_query(sql, esql, data=sales_test_data)
+
     
 
 

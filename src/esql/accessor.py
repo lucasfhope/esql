@@ -36,7 +36,6 @@ def _enforce_allowed_dtypes(data: pd.DataFrame) -> pd.DataFrame:
         pd.DataFrame: A new DataFrame with enforced dtypes.
     '''
     data = data.copy()
-
     for column in data.columns:
         current_dtype = data[column].dtype
         if pd.api.types.is_bool_dtype(current_dtype):
@@ -44,16 +43,20 @@ def _enforce_allowed_dtypes(data: pd.DataFrame) -> pd.DataFrame:
         elif pd.api.types.is_numeric_dtype(current_dtype):
             continue
         elif pd.api.types.is_datetime64_any_dtype(current_dtype):
+            data[column] = pd.to_datetime(data[column]).dt.date
             continue
         elif pd.api.types.is_object_dtype(current_dtype):
             try:
                 # Try to convert to datetime if possible
-                converted = pd.to_datetime(data[column], format="%Y-%m-%d", errors='raise')
+                converted = pd.to_datetime(
+                    data[column],
+                    format="%Y-%m-%d",
+                    errors='raise'
+                ).dt.date
                 data[column] = converted
                 continue
             except (ValueError, TypeError):
                 pass
         data[column] = data[column].astype("string")
-
     return data
        

@@ -24,13 +24,13 @@ class GroupedRow:
             column = aggregate['column']
             function = aggregate['function']
             index = self._column_indices[column]
-            value = self.initial_row[index] or 0
+            value = self._initial_row[index] or 0
             aggregate_key = self._aggregate_key(aggregate)
-            if aggregate['function'] in ['sum', 'min', 'max']:
+            if function in ['sum', 'min', 'max']:
                 data_map[aggregate_key] = value
-            elif func == 'count':
+            elif function == 'count':
                 data_map[aggregate_key] = 1
-            elif func == 'avg':
+            elif funtion == 'avg':
                 data_map[aggregate_key] = {'sum': value, 'count': 1}
         return data_map
 
@@ -41,11 +41,11 @@ class GroupedRow:
         value = row[index] or 0
         aggregate_key = self._aggregate_key(aggregate)
         if aggregate_key not in self._data_map:
-            if func in ['sum', 'min', 'max']:
+            if function in ['sum', 'min', 'max']:
                 self._data_map[aggregate_key] = value
-            elif func == 'count':
+            elif function == 'count':
                 self._data_map[aggregate_key] = 1
-            elif func == 'avg':
+            elif function == 'avg':
                 self._data_map[aggregate_key] = {'sum': value, 'count': 1}
         else:
             if function == 'sum':

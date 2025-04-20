@@ -475,9 +475,10 @@ def _parse_condition_value(column_dtype: np.dtype, operator: str, value: str, co
     
     #TODO implement EMF parsing here
     if operator in ['>=', '<=', '>', '<']:
-        if re.match(date_pattern, value) and pd.api.types.is_datetime64_any_dtype(column_dtype):
+        if re.match(date_pattern, value) and pd.api.types.is_object_dtype(column_dtype):
             try:
-                return datetime.strptime(value[1:-1].replace('/', '-'), '%Y-%m-%d').date(), False
+                date_str = value[1:-1].replace('/', '-')
+                return datetime.strptime(date_str, "%Y-%m-%d").date(), False
             except ValueError:
                 raise ParsingError(error_type, f"Invalid date in condition: '{condition}'")
         elif pd.api.types.is_numeric_dtype(column_dtype):
@@ -491,9 +492,10 @@ def _parse_condition_value(column_dtype: np.dtype, operator: str, value: str, co
     elif operator in ['=', '==', '!=']:
         if value.lower() in ['true', 'false'] and pd.api.types.is_bool_dtype(column_dtype):
             return value.lower() == 'true', False
-        elif re.match(date_pattern, value) and pd.api.types.is_datetime64_any_dtype(column_dtype):
+        elif re.match(date_pattern, value) and pd.api.types.is_object_dtype(column_dtype):
             try:
-                return datetime.strptime(value[1:-1].replace('/', '-'), '%Y-%m-%d').date(), False
+                date_str = value[1:-1].replace('/', '-')
+                return datetime.strptime(date_str, "%Y-%m-%d").date(), False
             except ValueError:
                 raise ParsingError(error_type, f"Invalid date in condition: '{condition}'")
         elif (value.startswith("'") and value.endswith("'") or value.startswith('"') and value.endswith('"')) \

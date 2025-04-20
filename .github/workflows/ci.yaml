@@ -4,6 +4,7 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+    paths-ignore: ['README.md', 'public/**', '.gitignore', 'Makefile', 'LICENSE']
 
 jobs:
   ci:

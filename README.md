@@ -1,0 +1,5 @@
+HOST=localhost
+USERNAME=postgres
+PASSWORD=171717lhope
+DBNAME=postgres
+PORT=5432

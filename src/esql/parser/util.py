@@ -81,7 +81,7 @@ def parse_select_clause(select_clause: str, groups: list[str], column_dtypes: di
         global_scope=[],
         group_specific=[]
     )
-    aggregates_in_order: List[GlobalAggregate | GroupAggregate] = []
+    aggregate_keys_in_order: List[GlobalAggregate | GroupAggregate] = []
     
     for item in (s.strip() for s in select_clause.split(',')):
         if '.' in item:
@@ -93,10 +93,9 @@ def parse_select_clause(select_clause: str, groups: list[str], column_dtypes: di
             )
             if 'group' in aggregate_result:
                 aggregates['group_specific'].append(aggregate_result)
-                aggregates_in_order.append(aggregate_result)
             else:
                 aggregates['global_scope'].append(aggregate_result)
-                aggregates_in_order.append(aggregate_result)
+            aggregate_keys_in_order.append(item)
         else:
             if item in column_dtypes:
                 grouping_attributes.append(item)
@@ -108,7 +107,7 @@ def parse_select_clause(select_clause: str, groups: list[str], column_dtypes: di
     return ParsedSelectClause(
         grouping_attributes=grouping_attributes,
         aggregates=aggregates,
-        aggregates_in_order = aggregates_in_order
+        aggregate_keys_in_order = aggregate_keys_in_order
     )
 
 

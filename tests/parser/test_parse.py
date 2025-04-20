@@ -62,31 +62,7 @@ def test_get_parsed_query_returns_the_expected_structure(data: pd.DataFrame):
                 ]
                     
             ),
-            aggregates_in_order=[
-                GlobalAggregate(
-                    column='quant',
-                    function='avg'
-                ),
-                GroupAggregate(
-                    column='quant',
-                    function='sum',
-                    group='g1'
-                ),
-                GroupAggregate(
-                    column='state',
-                    function='count',
-                    group='g2'
-                ),
-                GlobalAggregate(
-                    column='quant',
-                    function='min'
-                ),
-                GroupAggregate(
-                    column='quant',
-                    function='max',
-                    group='g3'
-                )
-            ]
+            aggregate_keys_in_order=['quant.avg', 'g1.quant.sum', 'g2.state.count', 'quant.min', 'g3.quant.max']
         ),
         over=['g1', 'g2', 'g3'],
         where=CompoundCondition(
@@ -237,7 +213,7 @@ def test_get_parsed_query_returns_expected_structure_with_missing_parts(data: pd
                 global_scope=[],
                 group_specific=[]
             ),
-            aggregates_in_order=[]
+            aggregate_keys_in_order=[]
         ),
         over=None,
         where=None,

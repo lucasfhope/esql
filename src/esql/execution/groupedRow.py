@@ -78,9 +78,6 @@ class GroupedRow:
             return f"{aggregate['group']}.{aggregate['column']}.{aggregate['function']}"
         else:
             return f"{aggregate['column']}.{aggregate['function']}"
-    
-    def aggregate_keys(self) -> list[str]:
-        return [self._aggregate_key(aggregate) for aggregate in self.aggregates['global_scope'] + self.aggregates['group_specific']]
 
     @property
     def data_map(self):

@@ -8,7 +8,7 @@ from src.esql.parser.types import ParsedSelectClause, ParsedWhereClause, ParsedS
 
 from src.esq.execution.groupedRow import GroupedRow
 
-def build_group_table(parsed_select_clause: ParsedSelectClause, groups: list[str] | None, parsed_where_clause: ParsedWhereClause | None, parsed_such_that_clause: ParsedSuchThatClause, parsed_having_clause: ParsedHavaingClause, aggregates: AggregatesDict, datatable: list[list[int | str | bool | date]], column_dtypes: dict[str, np.dtype], column_indices: dict[str, int]):
+def build_grouped_table(parsed_select_clause: ParsedSelectClause, groups: list[str] | None, parsed_where_clause: ParsedWhereClause | None, parsed_such_that_clause: ParsedSuchThatClause, parsed_having_clause: ParsedHavaingClause, aggregates: AggregatesDict, datatable: list[list[int | str | bool | date]], column_indices: dict[str, int]):
     grouping_attributes = parsed_select_clause['grouping_attributes']
     global_aggregates = aggregates['global_scope']
     group_aggregates = aggregates['group_specific']
@@ -23,16 +23,16 @@ def build_group_table(parsed_select_clause: ParsedSelectClause, groups: list[str
             )
         ]
 
-    grouped_table = {}
+    grouped_rows = {}
     for datatable_row in filtered_datatable:
         grouping_attribute_combination = tuple(datatable_row[column_indices[attribute]] for attribute in grouping_attributes)
-        if grouping_attribute_combination in grouped_table:
-            grouped_row = grouped_table.get(grouping_attribute_combination)
+        if grouping_attribute_combination in grouped_rows:
+            grouped_row = grouped_rowse.get(grouping_attribute_combination)
             for aggregate in global_aggregates:
                 grouped_row.update_data_map(aggregate, datatable_row)
         else:
             grouped_row = GroupedRow(grouping_attributes, aggregates, datatable_row)
-            grouped_table[grouping_attribute_combination] = grouped_row 
+            grouped_rows[grouping_attribute_combination] = grouped_row 
     
     if parsed_such_that_clause: 
         for group in groups:
@@ -51,31 +51,31 @@ def build_group_table(parsed_select_clause: ParsedSelectClause, groups: list[str
                     column_indices=column_indices
                 ):
                     grouping_attribute_combination = tuple(datatable_row[column_indices[attribute]] for attribute in grouping_attributes)
-                    grouped_row = grouped_table.get(grouping_attribute_combination)
+                    grouped_row = grouped_rows.get(grouping_attribute_combination)
                     if grouped_row:
                         for aggregate in group_aggregates:
                             if aggregate['group'] == group:
                                 grouped_row.update_data_map(aggregate, datatable_row)
 
-    grouped_table_list = list(grouped_table.values())
+    grouped_table = list(grouped_rows.values())
 
-    for grouped_row in grouped_table_list:
+    for grouped_row in grouped_table:
         grouped_row.convert_avg_in_data_map()
     
     if having_conditions:
-        grouped_table_list = [grouped_row for grouped_row in grouped_table_list
+        grouped_table = [grouped_row for grouped_row in grouped_table
             if evaluate_having_clause(
-                having_condition=parsed_having_clause,
+                condition=parsed_having_clause,
                 data_map=grouped_row.data_map
             )
         ]
-    return grouped_table_list
+    return grouped_table
 
 
 ###############################################################################
 # Evaluation
 ###############################################################################
-def _evaluate_having_clause(condition: ParsedHavingClause, data_map: dict[str, str | int | bool | date]):
+def _evaluate_having_clause(condition: ParsedHavingClause, data_map: dict[str, str | int | bool | date]) -> bool:
     operator = condition.get('operator')
     if operator == LogicalOperator.NOT:
         return not evaluate_having_clause(condition.get("condition"), data_map)
@@ -102,7 +102,7 @@ def _evaluate_having_clause(condition: ParsedHavingClause, data_map: dict[str, s
     )
 
 
-def _evaluate_condition(condition: dict, datatable_row: list, column_indices: dict[str, int]):
+def _evaluate_condition(condition: dict, datatable_row: list, column_indices: dict[str, int]) -> bool:
     if 'column' in condition:
         column = condition.get('column')
         operator = condition.get('operator')
@@ -146,26 +146,25 @@ def _evaluate_actual_vs_expected_value(actual_value: str | int | bool | date, co
         raise RuntimeError(f"Unknown operator in condition: '{condition}'")
 
 
-
 ###############################################################################
 # Projection and Ordering
 ###############################################################################
-def project_select_attributes(grouped_table_list: list[GroupedRow]) -> list[dict[str, str | int | bool | date]]:
-    # THIS WILL NOT BE IN THE SAME ORDER AS WAS GIVEN IN THE SELECT CLAUSE
-    grouping_attributes_and_aggregate_keys = grouped_table_list[0].data_map.keys()
-    select_table = []
-    for grouped_row in grouped_table_list:
+def project_select_attributes(parsed_select_clause: ParsedSelectClause, grouped_table: list[GroupedRow]) -> list[dict[str, str | int | bool | date]]:
+    grouping_attributes_and_aggregate_keys = parsed_select_clause['grouping_attributes'] + parsed_select_clause['aggregate_keys_in_order']
+    projected_table = []
+    for grouped_row in grouped_table:
         row = {}
         for column_name in grouping_attributes_and_aggregate_keys:
             row[column_name] = grouped_row.data_map.get(column_name)
-        select_table.append(row)
-    return select_table
+        projected_table.append(row)
+    return projected_table
 
-def order_by_sort(select_table: list[dict[str, str | int | bool | date]], order_by: int, grouping_attributes: list[str]):
+
+def order_by_sort(projected_table: list[dict[str, str | int | bool | date]], order_by: int, grouping_attributes: list[str]) -> list[dict[str, str | int | bool | date]]:
     if order_by > 0:
         column_sort_keys = tuple(grouping_attributes[:order_by])
-        select_table.sort(key=lambda row: tuple(row.get(column_name) for column_name in column_sort_keys))
-    return select_table
+        projected_table.sort(key=lambda row: tuple(row.get(column_name) for column_name in column_sort_keys))
+    return projected_table
 
 
 

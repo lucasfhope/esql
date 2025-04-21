@@ -122,6 +122,109 @@ def test_order_by_sort_works_when_grouping_attributes_are_not_at_the_front():
         grouping_attributes=grouping_attributes
     ) == order_by_2
 
+def test_order_by_sort_works_with_numbers():
+    grouping_attributes = ["round", "sum"]
+    order_by_0 = [ 
+        { "round": 480, "sum": 55727 },
+        { "round": 480, "sum": 48666 },
+        { "round": 520, "sum": 67995 },
+        { "round": 520, "sum": 58262 },
+        { "round": 500, "sum": 58354 },
+        { "round": 500, "sum": 54234 },
+        { "round": 480, "sum": 45861 }
+    ]
+    order_by_1 = [ 
+        { "round": 480, "sum": 55727 },
+        { "round": 480, "sum": 48666 },
+        { "round": 480, "sum": 45861 },
+        { "round": 500, "sum": 58354 },
+        { "round": 500, "sum": 54234 },
+        { "round": 520, "sum": 67995 },
+        { "round": 520, "sum": 58262 }
+    ]
+    order_by_2 = [ 
+        { "round": 480, "sum": 45861 },
+        { "round": 480, "sum": 48666 },
+        { "round": 480, "sum": 55727 },
+        { "round": 500, "sum": 54234 },
+        { "round": 500, "sum": 58354 },
+        { "round": 520, "sum": 58262 },
+        { "round": 520, "sum": 67995 }
+    ]
+    assert order_by_sort(
+        projected_table=order_by_0,
+        order_by=0,
+        grouping_attributes=grouping_attributes
+    ) == order_by_0
+    assert order_by_sort(
+        projected_table=order_by_0,
+        order_by=1,
+        grouping_attributes=grouping_attributes
+    ) == order_by_1
+    assert order_by_sort(
+        projected_table=order_by_0,
+        order_by=2,
+        grouping_attributes=grouping_attributes
+    ) == order_by_2
+
+
+def test_order_by_sort():
+    grouping_attributes = ["cust", "num"]
+    order_by_0 = [ 
+        { "cust": "Wally", "num": 10 },
+        { "cust": "Boo", "num": 8 },
+        { "cust": "Boo", "num": 6 },
+        { "cust": "Wally", "num": 15 },
+        { "cust": "Helen", "num": 12 },
+        { "cust": "Claire", "num": 20 },
+        { "cust": "Mia", "num": 7 },
+        { "cust": "Helen", "num": 18 },
+        { "cust": "Mia", "num": 5 },
+        { "cust": "Wally", "num": 25 },
+        { "cust": "Mia", "num": 6 }
+    ]
+    order_by_neg_1 = [ 
+        { "cust": "Wally", "num": 10 },
+        { "cust": "Wally", "num": 15 },
+        { "cust": "Wally", "num": 25 },
+        { "cust": "Mia", "num": 7 },
+        { "cust": "Mia", "num": 5 },
+        { "cust": "Mia", "num": 6 },
+        { "cust": "Helen", "num": 12 },
+        { "cust": "Helen", "num": 18 },
+        { "cust": "Claire", "num": 20 },
+        { "cust": "Boo", "num": 8 },
+        { "cust": "Boo", "num": 6 }
+    ]
+    order_by_neg_2 = [ 
+        { "cust": "Wally", "num": 25 },
+        { "cust": "Wally", "num": 15 },
+        { "cust": "Wally", "num": 10 },
+        { "cust": "Mia", "num": 7 },
+        { "cust": "Mia", "num": 6 },
+        { "cust": "Mia", "num": 5 },
+        { "cust": "Helen", "num": 18 },
+        { "cust": "Helen", "num": 12 },
+        { "cust": "Claire", "num": 20 },
+        { "cust": "Boo", "num": 8 },
+        { "cust": "Boo", "num": 6 }
+    ]
+    assert order_by_sort(
+        projected_table=order_by_0,
+        order_by=0,
+        grouping_attributes=grouping_attributes
+    ) == order_by_0
+    assert order_by_sort(
+        projected_table=order_by_0,
+        order_by=-1,
+        grouping_attributes=grouping_attributes
+    ) == order_by_neg_1
+    assert order_by_sort(
+        projected_table=order_by_0,
+        order_by=-2,
+        grouping_attributes=grouping_attributes
+    ) == order_by_neg_2
+    
 
 
 

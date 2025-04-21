@@ -701,6 +701,14 @@ def test_order_by_clause_returns_expected_structure():
     expected = 3
     assert parsedOrderByClause == expected
 
+def test_order_by_clause_returns_expected_structure_for_negative_number():
+    parsedOrderByClause = parse_order_by_clause(
+        order_by_clause="-3",
+        number_of_select_grouping_attributes=3
+    )
+    expected = -3
+    assert parsedOrderByClause == expected
+
 
 def test_order_by_clause_raises_error_for_non_number_input():
     with pytest.raises(ParsingError) as parsingError:
@@ -720,7 +728,7 @@ def test_order_by_clause_raises_error_for_non_integer_input():
 
 def test_order_by_clause_raises_error_for_out_of_range_inputs():
     out_of_range_values = [
-        "-1",
+        "-4"
         "4",
         "1001",
         "-543578",

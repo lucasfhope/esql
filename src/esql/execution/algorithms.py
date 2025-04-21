@@ -195,6 +195,9 @@ def order_by_sort(projected_table: list[dict[str, str | int | bool | date]], ord
     if order_by > 0:
         grouping_attribute_sort_keys = tuple(grouping_attributes[:order_by])
         projected_table.sort(key=lambda row: tuple(row.get(grouping_attribute) for grouping_attribute in grouping_attribute_sort_keys))
+    elif order_by < 0:
+        grouping_attribute_sort_keys = tuple(grouping_attributes[:abs(order_by)])
+        projected_table.sort(key=lambda row: tuple(row.get(grouping_attribute) for grouping_attribute in grouping_attribute_sort_keys), reverse=True)
     return projected_table
 
 

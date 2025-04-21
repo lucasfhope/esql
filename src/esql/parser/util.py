@@ -423,7 +423,7 @@ def parse_order_by_clause(order_by_clause: str | None, number_of_select_grouping
         order_value = int(order_by_clause.strip())  
     except ValueError:
         raise ParsingError(ParsingErrorType.ORDER_BY_CLAUSE, f"Invalid value: '{order_by_clause}'")
-    if order_value < 1 or order_value > number_of_select_grouping_attributes:
+    if order_value < 0 or order_value > number_of_select_grouping_attributes:
         raise ParsingError(ParsingErrorType.ORDER_BY_CLAUSE, f"{order_by_clause.strip()} out of range of the {number_of_select_grouping_attributes} grouping attributes provided in the select clause.")
     return order_value
 

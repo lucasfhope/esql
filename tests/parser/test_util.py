@@ -720,7 +720,6 @@ def test_order_by_clause_raises_error_for_non_integer_input():
 
 def test_order_by_clause_raises_error_for_out_of_range_inputs():
     out_of_range_values = [
-        "0",
         "-1",
         "4",
         "1001",

@@ -1,4 +1,7 @@
-from src.esql.execution.algorithms import order_by_sort
+import pytest
+from src.esql.parser.types import ParsedSelectClause, AggregatesDict
+from src.esql.execution.algorithms import project_select_attributes, order_by_sort
+from src.esql.execution.grouped_row import GroupedRow
 
 
 def test_order_by_sort():
@@ -73,3 +76,60 @@ def test_order_by_sort():
         grouping_attributes=grouping_attributes
     ) == order_by_2
 
+
+
+
+def test_projection_rounds_correctly():
+    grouping_attributes = ["cust", "prod"]
+    column_indices = {"cust": 0, "prod": 1, "quant1": 2, "quant2": 3}
+    initial_row = ["Alice", "Apples", 12.514839, 3543.4]
+
+    aggregates: AggregatesDict = {
+        "global_scope": [
+            {"column": "quant1", "function": "sum"},
+            {"column": "quant1", "function": "count"},
+            {"column": "quant2", "function": "sum"},
+            {"column": "quant2", "function": "count"}
+        ],
+        "group_specific": []
+    }
+
+    row = GroupedRow(
+        grouping_attributes=grouping_attributes,
+        aggregates=aggregates,
+        initial_row=initial_row,
+        column_indices=column_indices
+    )
+    table = [row]
+
+    parsed_select_clause = ParsedSelectClause(
+        grouping_attributes=grouping_attributes,
+        aggregates=aggregates,
+        select_items_in_order=["cust","prod","quant1.sum","quant1.count", "quant2.sum", "quant2.count"]
+    )
+
+    expected_result_1 = [ {"cust": "Alice", "prod": "Apples", "quant1.sum": 12.5, "quant1.count": 1, "quant2.sum": 3543.4, "quant2.count": 1} ]
+    expected_result_3 = [ {"cust": "Alice", "prod": "Apples", "quant1.sum": 12.515, "quant1.count": 1, "quant2.sum": 3543.400, "quant2.count": 1} ]
+    expected_result_5 = [ {"cust": "Alice", "prod": "Apples", "quant1.sum": 12.51484, "quant1.count": 1, "quant2.sum": 3543.40000, "quant2.count": 1} ]
+
+    assert project_select_attributes(
+        parsed_select_clause=parsed_select_clause,
+        grouped_table=table,
+        decimal_places=1
+    ) == expected_result_1
+
+    assert project_select_attributes(
+        parsed_select_clause=parsed_select_clause,
+        grouped_table=table,
+        decimal_places=3
+    ) == expected_result_3
+
+    assert project_select_attributes(
+        parsed_select_clause=parsed_select_clause,
+        grouped_table=table,
+        decimal_places=5
+    ) == expected_result_5
+
+
+if __name__ == '__main__':
+    pytest.main()

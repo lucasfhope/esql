@@ -1,7 +1,7 @@
 import numpy as np
 from datetime import  date
 
-from src.esql.execution.groupedRow import GroupedRow
+from src.esql.execution.grouped_row import GroupedRow
 from src.esql.execution.error import RuntimeError
 from src.esql.parser.util import find_group_in_such_that_section
 from src.esql.parser.types import ParsedSelectClause, ParsedWhereClause, ParsedSuchThatClause, ParsedHavingClause, AggregatesDict, LogicalOperator
@@ -65,7 +65,6 @@ def build_grouped_table(parsed_select_clause: ParsedSelectClause, groups: list[s
                                 )
 
     grouped_table = list(grouped_rows.values())
-
     for grouped_row in grouped_table:
         grouped_row.convert_avg_in_data_map()
     
@@ -177,13 +176,17 @@ def _evaluate_actual_vs_expected_value(actual_value: str | int | bool | date, op
 ###############################################################################
 # Projection and Ordering
 ###############################################################################
-def project_select_attributes(parsed_select_clause: ParsedSelectClause, grouped_table: list[GroupedRow]) -> list[dict[str, str | int | bool | date]]:
+def project_select_attributes(parsed_select_clause: ParsedSelectClause, grouped_table: list[GroupedRow], decimal_places: int) -> list[dict[str, str | int | bool | date]]:
     select_items = parsed_select_clause['select_items_in_order']
     projected_table = []
     for grouped_row in grouped_table:
         row = {}
         for select_item in select_items:
-            row[select_item] = grouped_row.data_map.get(select_item)
+            value = grouped_row.data_map.get(select_item)
+            if isinstance(value, float):
+                row[select_item] = round(value, decimal_places)
+            else:
+                row[select_item] = value
         projected_table.append(row)
     return projected_table
 

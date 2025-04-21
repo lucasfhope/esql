@@ -309,11 +309,5 @@ def test_mf_query_with_having(sales_test_data: pd.DataFrame):
 
 
 
-
-
-
-
-
-
 if __name__ == '__main__':
     pytest.main()

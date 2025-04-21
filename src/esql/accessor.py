@@ -1,4 +1,5 @@
 import pandas as pd
+from typeguard import typechecked
 from pandas.api.extensions import register_dataframe_accessor
 from pandas.api.types import is_string_dtype, is_numeric_dtype, is_bool_dtype, is_datetime64_any_dtype
 
@@ -10,10 +11,10 @@ class ESQLAccessor:
     def __init__(self, data: pd.DataFrame):
         self.data = _enforce_allowed_dtypes(data)
 
-
-    def query(self, query: str) -> pd.DataFrame:
+    @typechecked
+    def query(self, query: str, decimal_places:int=2) -> pd.DataFrame:
         parsed_query = get_parsed_query(self.data, query)
-        result_dataframe = execute(parsed_query)
+        result_dataframe = execute(parsed_query, decimal_places)
         return result_dataframe
 
 

@@ -4,7 +4,7 @@ from src.esql.parser.types import ParsedQuery
 from src.esql.execution import algorithms
 
 
-def execute(parsed_query: ParsedQuery) -> pd.DataFrame:
+def execute(parsed_query: ParsedQuery, decimal_places: int) -> pd.DataFrame:
     pd_datatable = parsed_query['data']
     columns = pd_datatable.columns.tolist()
     column_indices = { column: index for index, column in enumerate(columns) }
@@ -23,7 +23,8 @@ def execute(parsed_query: ParsedQuery) -> pd.DataFrame:
     
     projected_table = algorithms.project_select_attributes(
         parsed_select_clause=parsed_query['select'],
-        grouped_table=grouped_table
+        grouped_table=grouped_table,
+        decimal_places=decimal_places
     )
     
     ordered_table = algorithms.order_by_sort(

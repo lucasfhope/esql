@@ -1,18 +1,23 @@
 import pandas as pd
-from typeguard import typechecked
+from beartype import beartype
+from beartype.vale import Is
+from typing import Annotated
 from pandas.api.extensions import register_dataframe_accessor
 from pandas.api.types import is_string_dtype, is_numeric_dtype, is_bool_dtype, is_datetime64_any_dtype
 
 from src.esql.parser.parse import get_parsed_query
 from src.esql.execution.execute import execute
 
+
+IntGreaterThanZero = Annotated[int, Is[lambda x: x > 0]]
+
 @register_dataframe_accessor("esql")
 class ESQLAccessor:
     def __init__(self, data: pd.DataFrame):
         self.data = _enforce_allowed_dtypes(data)
 
-    @typechecked
-    def query(self, query: str, decimal_places:int=2) -> pd.DataFrame:
+    @beartype
+    def query(self, query: str, decimal_places: IntGreaterThanZero=2) -> pd.DataFrame:
         parsed_query = get_parsed_query(self.data, query)
         result_dataframe = execute(parsed_query, decimal_places)
         return result_dataframe

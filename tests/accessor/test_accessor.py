@@ -1,6 +1,6 @@
 import pytest
 import pandas as pd
-import typeguard
+import beartype
 
 
 def test_accessor_does_not_accept_types_other_than_string_for_query_and_int_for_decimal_places():
@@ -11,11 +11,21 @@ def test_accessor_does_not_accept_types_other_than_string_for_query_and_int_for_
         {"query": False, "decimal_places": 1}
     ]
     for arg in args:
-        with pytest.raises(typeguard.TypeCheckError) as error:
+        with pytest.raises(beartype.roar.BeartypeCallHintParamViolation) as error:
             df = pd.DataFrame()
             df.esql.query(
                 query=arg['query'],
                 decimal_places=arg['decimal_places']
+            )
+
+def test_accessor_does_not_accept_negative_values_or_zero_for_decimal_places():
+    dp_values = [ -1, -10, 0 ]
+    for dp in dp_values:
+        with pytest.raises(beartype.roar.BeartypeCallHintParamViolation) as error:
+            df = pd.DataFrame()
+            df.esql.query(
+                query="query",
+                decimal_places=dp
             )
     
 

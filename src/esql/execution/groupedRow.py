@@ -1,7 +1,7 @@
-from typing import TypedDict
-from src.esql.parser.types import AggregatesDict, GlobalAggregate, GroupAggregate
+import math
+import numpy as np
 from datetime import date
-
+from src.esql.parser.types import AggregatesDict, GlobalAggregate, GroupAggregate
 
 class GroupedRow:
     '''
@@ -24,7 +24,9 @@ class GroupedRow:
             column = aggregate['column']
             function = aggregate['function']
             index = self._column_indices[column]
-            value = self._initial_row[index] or 0
+            value = self._initial_row[index] or np.nan
+            if math.isnan(value):
+                continue
             aggregate_key = self._aggregate_key(aggregate)
             if function in ['sum', 'min', 'max']:
                 data_map[aggregate_key] = value
@@ -38,7 +40,9 @@ class GroupedRow:
         column = aggregate['column']
         function = aggregate['function']
         index = self._column_indices[column]
-        value = row[index] or 0
+        value = row[index] or np.nan
+        if math.isnan(value):
+            return
         aggregate_key = self._aggregate_key(aggregate)
         if aggregate_key not in self._data_map:
             if function in ['sum', 'min', 'max']:
@@ -71,7 +75,7 @@ class GroupedRow:
                 aggregate_key = self._aggregate_key(aggregate)
                 if self._data_map.get(aggregate_key):
                     _sum, _count = self._data_map[aggregate_key]['sum'], self._data_map[aggregate_key]['count']
-                    _avg = round(_sum/_count, 2)
+                    _avg = _sum/_count
                     self._data_map[aggregate_key] = _avg
 
     def _aggregate_key(self, aggregate: GlobalAggregate | GroupAggregate) -> str:

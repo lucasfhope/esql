@@ -27,8 +27,8 @@ def _enforce_allowed_dtypes(data: pd.DataFrame) -> pd.DataFrame:
     '''
     Convert DataFrame columns so that each column's dtype is one of:
       - "string" for textual data
-    - bool for boolean data
-      - datetime64[ns] for date/time data
+      - bool for boolean data
+      - datetime.date for date/time data
       - int or float for numeric data
       
     For numeric columns, if they're already integer or float, they are left unchanged.

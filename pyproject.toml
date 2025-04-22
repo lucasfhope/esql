@@ -1,7 +1,7 @@
 [project]
 name = "esql"
 version = "0.1.0"
-description = ""
+description = "ESQL is a query language based off of SQL that is designed to be able to include mutiple aggregate querieswithout the need of nested subqueries and repetitive selection, grouping, and aggregation."
 authors = [
     {name = "Lucas Hope", email = "lucasfhope@icloud.com"}
 ]
